@@ -1,0 +1,47 @@
+{
+  "name": "@openbrains/dashboard",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "preview": "bun run build && vite preview",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "deploy": "bun run build && wrangler deploy",
+    "clean": "rm -rf dist .turbo .output .wrangler node_modules/.vite",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@clerk/tanstack-react-start": "^1.2.5",
+    "@cloudflare/vite-plugin": "^1.26.0",
+    "@openbrains/convex": "workspace:*",
+    "@openbrains/shared": "workspace:*",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@tailwindcss/vite": "^4.1.18",
+    "@tanstack/react-router": "^1.132.0",
+    "@tanstack/react-start": "^1.132.0",
+    "@tanstack/router-plugin": "^1.132.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "convex": "^1.39.1",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss": "^4.1.18",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.7.0",
+    "vite": "^8.0.0",
+    "wrangler": "^4.92.0"
+  }
+}

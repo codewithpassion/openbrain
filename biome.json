@@ -21,7 +21,9 @@
       "!**/.wrangler",
       "!**/.convex",
       "!**/build",
-      "!**/coverage"
+      "!**/coverage",
+      "!**/routeTree.gen.ts",
+      "!apps/dashboard/worker-configuration.d.ts"
     ]
   },
   "formatter": {
@@ -135,6 +137,31 @@
       "linter": {
         "rules": {
           "style": { "noDefaultExport": "off" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/dashboard/src/routes/**",
+        "apps/dashboard/src/router.tsx",
+        "apps/dashboard/vite.config.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off",
+            "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/dashboard/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useKeyWithClickEvents": "off"
+          }
         }
       }
     }

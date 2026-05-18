@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "version": "0.0.0",
+  "exports": {
+    "./api": "./convex/_generated/api.ts",
+    "./dataModel": "./convex/_generated/dataModel.ts"
+  },
   "scripts": {
     "dev": "convex dev",
     "test": "bun test",

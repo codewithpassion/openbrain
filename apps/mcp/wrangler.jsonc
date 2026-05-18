@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openbrains-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "ai": { "binding": "AI" },
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "thoughts-v1" }],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_ME" }],
+  "vars": {
+    "CONVEX_URL": "https://example.convex.cloud",
+    "CLERK_DOMAIN": "example.clerk.accounts.dev",
+    "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b"
+  }
+}
