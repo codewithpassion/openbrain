@@ -1,0 +1,142 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.json",
+      "**/*.jsonc",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.turbo",
+      "!**/.output",
+      "!**/.wrangler",
+      "!**/.convex",
+      "!**/build",
+      "!**/coverage"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": { "recommended": true },
+      "complexity": {
+        "recommended": true,
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 15 }
+        },
+        "noUselessStringConcat": "error",
+        "noUselessUndefinedInitialization": "error",
+        "useSimplifiedLogicExpression": "error"
+      },
+      "correctness": {
+        "recommended": true,
+        "noUndeclaredDependencies": "off",
+        "noUnusedFunctionParameters": "error",
+        "noUnusedImports": "error",
+        "noUnusedPrivateClassMembers": "error",
+        "noUnusedVariables": "error",
+        "useImportExtensions": "off"
+      },
+      "performance": { "recommended": true },
+      "security": { "recommended": true },
+      "style": {
+        "recommended": true,
+        "noDefaultExport": "error",
+        "noNegationElse": "error",
+        "noParameterAssign": "error",
+        "noShoutyConstants": "error",
+        "useBlockStatements": "error",
+        "useCollapsedElseIf": "error",
+        "useConsistentArrayType": { "level": "error", "options": { "syntax": "shorthand" } },
+        "useConsistentBuiltinInstantiation": "error",
+        "useDefaultSwitchClause": "error",
+        "useExplicitLengthCheck": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false,
+            "filenameCases": ["kebab-case", "camelCase", "PascalCase"]
+          }
+        },
+        "useForOf": "error",
+        "useFragmentSyntax": "error",
+        "useNamingConvention": "off",
+        "useShorthandAssign": "error",
+        "useThrowNewError": "error",
+        "useThrowOnlyError": "error"
+      },
+      "suspicious": {
+        "recommended": true,
+        "noConsole": { "level": "error", "options": { "allow": ["warn", "error", "info"] } },
+        "noEmptyBlockStatements": "error",
+        "noEvolvingTypes": "error",
+        "noExplicitAny": "error",
+        "noMisplacedAssertion": "error",
+        "useAwait": "error",
+        "useErrorMessage": "error",
+        "useNumberToFixedDigitsArgument": "error",
+        "noImportCycles": "error"
+      },
+      "nursery": {
+        "recommended": false,
+        "noFloatingPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "useSortedClasses": "error"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "style": { "noDefaultExport": "off" },
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      }
+    },
+    {
+      "includes": ["**/convex/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": { "noDefaultExport": "off" }
+        }
+      }
+    }
+  ]
+}
