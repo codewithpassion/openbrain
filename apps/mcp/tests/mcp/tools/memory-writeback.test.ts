@@ -35,9 +35,11 @@ describe("memory-writeback tool", () => {
     expect(convex.writebackCalls.length).toBe(1);
     const wb = convex.writebackCalls[0];
     expect(wb?.userId).toBe("user_a");
-    expect(wb?.origin).toBe("agent_inferred");
-    expect(wb?.trustGrade).toBe("evidence");
-    expect(wb?.agent).toBe("claude");
+    expect(wb?.provenance.origin).toBe("agent_inferred");
+    expect(wb?.provenance.agent).toBe("claude");
+    // The HTTP endpoint has no `trustGrade` arg — anything resembling one would
+    // be a regression (CLAUDE.md §7). The Convex input type doesn't expose it.
+    expect("trustGrade" in (wb as unknown as Record<string, unknown>)).toBe(false);
     expect(binding.upsertCalls.length).toBe(1);
     expect(binding.upsertCalls[0]?.namespace).toBe("user_a");
   });

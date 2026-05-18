@@ -41,6 +41,47 @@ describe("memory-recall tool", () => {
     expect(out.results[0]?.origin).toBe("human");
   });
 
+  test("surfaces trustGrade + origin from joined sidecars", async () => {
+    const { envelope, convex, binding } = setup("user_a");
+    convex.seedThought({
+      _id: "t_77",
+      userId: "user_a",
+      content: "joined",
+      source: "agent",
+      embeddingModel: "fake",
+      embeddingDims: 1024,
+      fingerprint: "a".repeat(64),
+      metadata: emptyMetadata(),
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    convex.seedRecallExtras("t_77", {
+      provenance: {
+        _id: "p_1",
+        thoughtId: "t_77",
+        userId: "user_a",
+        origin: "agent_inferred",
+        capturedAt: 1,
+      },
+      usePolicy: {
+        _id: "up_1",
+        thoughtId: "t_77",
+        userId: "user_a",
+        trustGrade: "instruction",
+        scopes: ["personal"],
+      },
+    });
+    binding.setMatches([{ id: "t_77", score: 0.95 }]);
+    const result = await memoryRecallHandler({ query: "x" }, envelope);
+    const out = memoryRecallOutputSchema.parse(result.structuredContent);
+    expect(out.results[0]?.trustGrade).toBe("instruction");
+    expect(out.results[0]?.origin).toBe("agent_inferred");
+    expect(convex.recallCalls.length).toBe(1);
+    expect(convex.recallCalls[0]?.thoughtIds).toEqual(["t_77"]);
+    expect(convex.recallCalls[0]?.scores).toEqual([0.95]);
+    expect(convex.recallCalls[0]?.query).toBe("x");
+  });
+
   test("respects threshold", async () => {
     const { envelope, convex, binding } = setup("u");
     convex.seedThought({

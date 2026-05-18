@@ -9,24 +9,33 @@
  * The Convex side trusts these headers and dispatches to internal mutations
  * that take `userId` as a parameter. The Worker is therefore the sole point
  * where userId attribution is decided — see CLAUDE.md §"Patterns".
+ *
+ * Every parsed response goes through a Zod schema in
+ * `./convex-schemas.ts` before crossing this function boundary. The raw
+ * `fetch` call below is the only untyped escape hatch.
  */
 
-import type { MemoryOrigin, ThoughtMetadata, TrustGrade } from "@openbrains/shared";
+import type { MemoryOrigin, ThoughtMetadata } from "@openbrains/shared";
+import type { z } from "zod";
+import {
+  ByFingerprintResponseSchema,
+  CaptureResponseSchema,
+  type ConvexThoughtRow,
+  type MemoryRecallResponse,
+  MemoryRecallResponseSchema,
+  type MemoryReviewStatus,
+  ReviewRequiresReviewErrorSchema,
+  type ReviewResponse,
+  ReviewResponseSchema,
+  ThoughtRowsResponseSchema,
+  type ThoughtStatsResponse,
+  ThoughtStatsResponseSchema,
+  WritebackResponseSchema,
+} from "./convex-schemas";
+
+export type { ConvexThoughtRow, MemoryRecallResponse, ReviewResponse, ThoughtStatsResponse };
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
-
-export interface ConvexThoughtRow {
-  _id: string;
-  userId: string;
-  content: string;
-  source: string;
-  embeddingModel: string;
-  embeddingDims: number;
-  fingerprint: string;
-  metadata: ThoughtMetadata;
-  createdAt: number;
-  updatedAt: number;
-}
 
 export interface ConvexCaptureInput {
   userId: string;
@@ -38,49 +47,71 @@ export interface ConvexCaptureInput {
   metadata: ThoughtMetadata;
 }
 
-export interface ConvexWritebackInput extends ConvexCaptureInput {
+export interface ConvexWritebackProvenance {
   origin: MemoryOrigin;
-  trustGrade: TrustGrade;
-  scopes: readonly string[];
   agent?: string;
   agentVersion?: string;
   sessionId?: string;
-  sourceRef?: { kind: string; uri: string; excerpt?: string };
+}
+
+export interface ConvexWritebackInput {
+  userId: string;
+  content: string;
+  source: string;
+  embeddingModel: string;
+  embeddingDims: number;
+  fingerprint: string;
+  metadata: ThoughtMetadata;
+  provenance: ConvexWritebackProvenance;
+  scopes?: readonly string[];
+  vectorizeId?: string;
 }
 
 export interface ConvexReviewInput {
   userId: string;
   thoughtId: string;
-  status: "unreviewed" | "confirmed" | "rejected" | "needs_revision";
-  reviewer: string;
-  promoteTo?: TrustGrade;
+  status: MemoryReviewStatus;
+  promoteTo?: "instruction";
   note?: string;
+}
+
+export interface ConvexListFilter {
+  userId: string;
+  limit?: number;
+  type?: string;
+  topic?: string;
+  person?: string;
+  days?: number;
+}
+
+export interface ConvexRecallInput {
+  userId: string;
+  thoughtIds: readonly string[];
+  query?: string;
+  scores?: readonly number[];
 }
 
 export interface ConvexClient {
   captureThought(input: ConvexCaptureInput): Promise<{ id: string }>;
   /**
-   * Returns an existing thoughtId for `(userId, fingerprint)` if any. Used by
-   * `capture-thought` to satisfy the spec's idempotency requirement.
-   *
-   * NOTE — DEVIATION from `packages/convex/convex/http.ts`: that file does not
-   * yet expose `getByFingerprint` over HTTP. The real Convex query
-   * (`thoughts.getByFingerprint`) exists; wiring it up requires a small
-   * addition to `http.ts` (open item — out of this app's scope).
+   * Returns the existing thought row for `(userId, fingerprint)` if any, or
+   * `null` if none. Used by `capture-thought` to satisfy the idempotency
+   * requirement.
    */
-  getByFingerprint(input: { userId: string; fingerprint: string }): Promise<{ id: string } | null>;
+  getByFingerprint(input: {
+    userId: string;
+    fingerprint: string;
+  }): Promise<ConvexThoughtRow | null>;
   getThoughtsByIds(input: {
     userId: string;
     ids: readonly string[];
   }): Promise<readonly ConvexThoughtRow[]>;
-  listThoughts(input: { userId: string; limit?: number }): Promise<readonly ConvexThoughtRow[]>;
-  thoughtStats(input: { userId: string }): Promise<{
-    total: number;
-    byType: Record<string, number>;
-    topTopics: readonly { topic: string; count: number }[];
-  }>;
-  memoryWriteback(input: ConvexWritebackInput): Promise<{ id: string }>;
-  memoryReview(input: ConvexReviewInput): Promise<{ id: string }>;
+  /** POST /api/thoughts/list — filter pushdown (type, topic, person, days, limit). */
+  listThoughts(input: ConvexListFilter): Promise<readonly ConvexThoughtRow[]>;
+  thoughtStats(input: { userId: string }): Promise<ThoughtStatsResponse>;
+  memoryRecall(input: ConvexRecallInput): Promise<MemoryRecallResponse>;
+  memoryWriteback(input: ConvexWritebackInput): Promise<{ thoughtId: string }>;
+  memoryReview(input: ConvexReviewInput): Promise<ReviewResponse>;
 }
 
 interface ConvexClientOptions {
@@ -101,6 +132,18 @@ class ConvexHttpError extends Error {
   }
 }
 
+/**
+ * Thrown by `memoryReview` when the server refuses promotion because the
+ * status was not `confirmed`. The tool layer maps this to a tool-level
+ * failure rather than crashing the request.
+ */
+class ConvexReviewRequiredError extends Error {
+  public constructor() {
+    super("REQUIRES_REVIEW");
+    this.name = "ConvexReviewRequiredError";
+  }
+}
+
 export function createConvexClient(options: ConvexClientOptions): ConvexClient {
   const base = options.convexUrl.replace(/\/$/, "");
   const doFetch: FetchLike = options.fetch ?? ((url, init) => fetch(url, init));
@@ -113,19 +156,34 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
     };
   }
 
-  async function post<T>(path: string, userId: string, body: unknown): Promise<T> {
+  async function postJson(
+    path: string,
+    userId: string,
+    body: unknown,
+  ): Promise<{ status: number; json: unknown }> {
     const res = await doFetch(`${base}${path}`, {
       method: "POST",
       headers: headers(userId),
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      throw new ConvexHttpError(`convex ${path} failed: ${res.status.toString()}`, res.status);
-    }
-    return (await res.json()) as T;
+    const json = res.status === 204 ? null : ((await res.json()) as unknown);
+    return { status: res.status, json };
   }
 
-  async function get<T>(path: string, userId: string): Promise<T> {
+  async function post<T>(
+    path: string,
+    userId: string,
+    body: unknown,
+    schema: z.ZodType<T>,
+  ): Promise<T> {
+    const { status, json } = await postJson(path, userId, body);
+    if (status < 200 || status >= 300) {
+      throw new ConvexHttpError(`convex ${path} failed: ${status.toString()}`, status);
+    }
+    return schema.parse(json);
+  }
+
+  async function get<T>(path: string, userId: string, schema: z.ZodType<T>): Promise<T> {
     const res = await doFetch(`${base}${path}`, {
       method: "GET",
       headers: headers(userId),
@@ -133,7 +191,8 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
     if (!res.ok) {
       throw new ConvexHttpError(`convex ${path} failed: ${res.status.toString()}`, res.status);
     }
-    return (await res.json()) as T;
+    const json = (await res.json()) as unknown;
+    return schema.parse(json);
   }
 
   return {
@@ -146,64 +205,139 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
         fingerprint: input.fingerprint,
         metadata: input.metadata,
       };
-      return await post<{ id: string }>("/api/thoughts", input.userId, body);
+      return await post("/api/thoughts", input.userId, body, CaptureResponseSchema);
     },
     async getByFingerprint(input) {
-      const { id } = await post<{ id: string | null }>(
+      const { thought } = await post(
         "/api/thoughts/by-fingerprint",
         input.userId,
         { fingerprint: input.fingerprint },
+        ByFingerprintResponseSchema,
       );
-      return id === null ? null : { id };
+      return thought;
     },
     async getThoughtsByIds(input) {
-      const { rows } = await post<{ rows: readonly ConvexThoughtRow[] }>(
+      const { rows } = await post(
         "/api/thoughts/search",
         input.userId,
         { ids: input.ids },
+        ThoughtRowsResponseSchema,
       );
       return rows;
     },
     async listThoughts(input) {
-      const qs = input.limit === undefined ? "" : `?limit=${input.limit.toString()}`;
-      const { rows } = await get<{ rows: readonly ConvexThoughtRow[] }>(
-        `/api/thoughts${qs}`,
+      const body: {
+        limit?: number;
+        type?: string;
+        topic?: string;
+        person?: string;
+        days?: number;
+      } = {};
+      if (input.limit !== undefined) {
+        body.limit = input.limit;
+      }
+      if (input.type !== undefined) {
+        body.type = input.type;
+      }
+      if (input.topic !== undefined) {
+        body.topic = input.topic;
+      }
+      if (input.person !== undefined) {
+        body.person = input.person;
+      }
+      if (input.days !== undefined) {
+        body.days = input.days;
+      }
+      const { rows } = await post(
+        "/api/thoughts/list",
         input.userId,
+        body,
+        ThoughtRowsResponseSchema,
       );
       return rows;
     },
     async thoughtStats(input) {
-      return await get<{
-        total: number;
-        byType: Record<string, number>;
-        topTopics: readonly { topic: string; count: number }[];
-      }>("/api/thoughts/stats", input.userId);
+      return await get("/api/thoughts/stats", input.userId, ThoughtStatsResponseSchema);
+    },
+    async memoryRecall(input) {
+      const body: { thoughtIds: readonly string[]; query?: string; scores?: readonly number[] } = {
+        thoughtIds: input.thoughtIds,
+      };
+      if (input.query !== undefined) {
+        body.query = input.query;
+      }
+      if (input.scores !== undefined) {
+        body.scores = input.scores;
+      }
+      return await post("/api/memory/recall", input.userId, body, MemoryRecallResponseSchema);
     },
     async memoryWriteback(input) {
-      const body = {
+      const provenance: ConvexWritebackProvenance = { origin: input.provenance.origin };
+      if (input.provenance.agent !== undefined) {
+        provenance.agent = input.provenance.agent;
+      }
+      if (input.provenance.agentVersion !== undefined) {
+        provenance.agentVersion = input.provenance.agentVersion;
+      }
+      if (input.provenance.sessionId !== undefined) {
+        provenance.sessionId = input.provenance.sessionId;
+      }
+      const body: {
+        content: string;
+        source: string;
+        embeddingModel: string;
+        embeddingDims: number;
+        fingerprint: string;
+        metadata: ThoughtMetadata;
+        provenance: ConvexWritebackProvenance;
+        scopes?: readonly string[];
+        vectorizeId?: string;
+      } = {
         content: input.content,
         source: input.source,
         embeddingModel: input.embeddingModel,
         embeddingDims: input.embeddingDims,
         fingerprint: input.fingerprint,
         metadata: input.metadata,
-        origin: input.origin,
-        ...(input.agent === undefined ? {} : { agent: input.agent }),
-        ...(input.agentVersion === undefined ? {} : { agentVersion: input.agentVersion }),
-        ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+        provenance,
       };
-      return await post<{ id: string }>("/api/memory/writeback", input.userId, body);
+      if (input.scopes !== undefined) {
+        body.scopes = input.scopes;
+      }
+      if (input.vectorizeId !== undefined) {
+        body.vectorizeId = input.vectorizeId;
+      }
+      return await post("/api/memory/writeback", input.userId, body, WritebackResponseSchema);
     },
     async memoryReview(input) {
-      const body = {
+      const body: {
+        thoughtId: string;
+        status: MemoryReviewStatus;
+        promoteTo?: "instruction";
+        note?: string;
+      } = {
         thoughtId: input.thoughtId,
         status: input.status,
-        reviewer: input.reviewer,
-        ...(input.note === undefined ? {} : { note: input.note }),
       };
-      return await post<{ id: string }>("/api/memory/review", input.userId, body);
+      if (input.promoteTo !== undefined) {
+        body.promoteTo = input.promoteTo;
+      }
+      if (input.note !== undefined) {
+        body.note = input.note;
+      }
+      const { status, json } = await postJson("/api/memory/review", input.userId, body);
+      if (status === 422) {
+        const err = ReviewRequiresReviewErrorSchema.safeParse(json);
+        if (err.success) {
+          throw new ConvexReviewRequiredError();
+        }
+      }
+      if (status < 200 || status >= 300) {
+        throw new ConvexHttpError(`convex /api/memory/review failed: ${status.toString()}`, status);
+      }
+      return ReviewResponseSchema.parse(json);
     },
   };
 }
 
-export { ConvexHttpError };
+export { ConvexHttpError, ConvexReviewRequiredError };

@@ -21,7 +21,7 @@ export async function captureThoughtHandler(
   // for this user, return that id and skip embedding + Vectorize upsert.
   const existing = await envelope.deps.convex.getByFingerprint({ userId, fingerprint });
   if (existing !== null) {
-    return ok({ thoughtId: ThoughtId.parse(existing.id), duplicate: true });
+    return ok({ thoughtId: ThoughtId.parse(existing._id), duplicate: true });
   }
 
   const embedding = await envelope.deps.embeddings.embed(content);

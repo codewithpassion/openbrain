@@ -2,8 +2,9 @@ import { thoughtStatsInputSchema } from "@openbrains/shared";
 import { err, ok, type ToolEnvelope, type ToolTextResult } from "./types";
 
 /**
- * DEVIATION: `GET /api/thoughts/stats` does not surface `topPeople`. We
- * default to `[]` here; pushing the aggregation into Convex is an open item.
+ * Returns thought stats for the authenticated user. Convex returns
+ * `topPeople: { name, count }[]`; the MCP tool surface (per
+ * `@openbrains/shared`) uses `{ person, count }`, so we map here.
  */
 export async function thoughtStatsHandler(
   rawInput: unknown,
@@ -21,6 +22,6 @@ export async function thoughtStatsHandler(
     total: stats.total,
     byType: stats.byType,
     topTopics: stats.topTopics,
-    topPeople: [],
+    topPeople: stats.topPeople.map((p) => ({ person: p.name, count: p.count })),
   });
 }

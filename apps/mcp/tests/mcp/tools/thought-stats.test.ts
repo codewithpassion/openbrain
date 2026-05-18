@@ -23,13 +23,14 @@ describe("thought-stats tool", () => {
       total: 5,
       byType: { idea: 3, task: 2 },
       topTopics: [{ topic: "ai", count: 3 }],
+      topPeople: [{ name: "alice", count: 2 }],
     });
     const result = await thoughtStatsHandler({}, envelope);
     const out = thoughtStatsOutputSchema.parse(result.structuredContent);
     expect(out.total).toBe(5);
     expect(out.byType).toEqual({ idea: 3, task: 2 });
     expect(out.topTopics).toEqual([{ topic: "ai", count: 3 }]);
-    expect(out.topPeople).toEqual([]);
+    expect(out.topPeople).toEqual([{ person: "alice", count: 2 }]);
   });
 
   test("calls Convex with the authenticated userId", async () => {

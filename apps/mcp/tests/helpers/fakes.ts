@@ -3,9 +3,13 @@ import type { ThoughtMetadata } from "@openbrains/shared";
 import type {
   ConvexCaptureInput,
   ConvexClient,
+  ConvexListFilter,
+  ConvexRecallInput,
   ConvexReviewInput,
   ConvexThoughtRow,
   ConvexWritebackInput,
+  MemoryRecallResponse,
+  ThoughtStatsResponse,
 } from "../../src/deps/convex";
 import type { VectorizeBinding } from "../../src/env";
 
@@ -135,42 +139,41 @@ export function makeFakeVectorize(): FakeVectorize {
 /* FakeConvex                                                                 */
 /* -------------------------------------------------------------------------- */
 
+type RecallExtras = {
+  provenance: MemoryRecallResponse["items"][number]["provenance"];
+  usePolicy: MemoryRecallResponse["items"][number]["usePolicy"];
+};
+
 export interface FakeConvex extends ConvexClient {
   readonly captureCalls: readonly ConvexCaptureInput[];
   readonly writebackCalls: readonly ConvexWritebackInput[];
   readonly reviewCalls: readonly ConvexReviewInput[];
-  readonly listCalls: readonly { userId: string; limit?: number }[];
+  readonly listCalls: readonly ConvexListFilter[];
   readonly statsCalls: readonly { userId: string }[];
   readonly getByIdsCalls: readonly { userId: string; ids: readonly string[] }[];
+  readonly recallCalls: readonly ConvexRecallInput[];
   seedThought(row: ConvexThoughtRow): void;
   seedFingerprintHit(userId: string, fingerprint: string, thoughtId: string): void;
-  seedStats(
-    userId: string,
-    stats: {
-      total: number;
-      byType: Record<string, number>;
-      topTopics: readonly { topic: string; count: number }[];
-    },
-  ): void;
+  seedStats(userId: string, stats: ThoughtStatsResponse): void;
+  /** Attach optional provenance/use-policy returned by `memoryRecall` for an id. */
+  seedRecallExtras(thoughtId: string, extras: Partial<RecallExtras>): void;
+  /** Override the review response (default `{ reviewId, promoted: promoteTo === "instruction" }`). */
+  setReviewResponse(response: { reviewId: string; promoted: boolean }): void;
 }
 
 export function makeFakeConvex(): FakeConvex {
   const captureCalls: ConvexCaptureInput[] = [];
   const writebackCalls: ConvexWritebackInput[] = [];
   const reviewCalls: ConvexReviewInput[] = [];
-  const listCalls: { userId: string; limit?: number }[] = [];
+  const listCalls: ConvexListFilter[] = [];
   const statsCalls: { userId: string }[] = [];
   const getByIdsCalls: { userId: string; ids: readonly string[] }[] = [];
+  const recallCalls: ConvexRecallInput[] = [];
   const rowsById = new Map<string, ConvexThoughtRow>();
   const fingerprintIndex = new Map<string, string>(); // `${userId}::${fp}` -> thoughtId
-  const statsByUser = new Map<
-    string,
-    {
-      total: number;
-      byType: Record<string, number>;
-      topTopics: readonly { topic: string; count: number }[];
-    }
-  >();
+  const statsByUser = new Map<string, ThoughtStatsResponse>();
+  const recallExtrasById = new Map<string, RecallExtras>();
+  let reviewResponseOverride: { reviewId: string; promoted: boolean } | null = null;
   let idCounter = 0;
   function nextId(): string {
     idCounter += 1;
@@ -199,7 +202,11 @@ export function makeFakeConvex(): FakeConvex {
     },
     getByFingerprint(input) {
       const id = fingerprintIndex.get(`${input.userId}::${input.fingerprint}`);
-      return Promise.resolve(id === undefined ? null : { id });
+      if (id === undefined) {
+        return Promise.resolve(null);
+      }
+      const row = rowsById.get(id);
+      return Promise.resolve(row ?? null);
     },
     getThoughtsByIds(input) {
       getByIdsCalls.push({ userId: input.userId, ids: input.ids });
@@ -216,11 +223,16 @@ export function makeFakeConvex(): FakeConvex {
       listCalls.push({
         userId: input.userId,
         ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.type === undefined ? {} : { type: input.type }),
+        ...(input.topic === undefined ? {} : { topic: input.topic }),
+        ...(input.person === undefined ? {} : { person: input.person }),
+        ...(input.days === undefined ? {} : { days: input.days }),
       });
-      const rows = [...rowsById.values()]
+      const all = [...rowsById.values()]
         .filter((r) => r.userId === input.userId)
         .sort((a, b) => b.createdAt - a.createdAt);
-      const limited = input.limit === undefined ? rows : rows.slice(0, input.limit);
+      const matched = all.filter((row) => matchesFilters(row, input));
+      const limited = input.limit === undefined ? matched : matched.slice(0, input.limit);
       return Promise.resolve(limited);
     },
     thoughtStats(input) {
@@ -229,7 +241,24 @@ export function makeFakeConvex(): FakeConvex {
       if (seeded !== undefined) {
         return Promise.resolve(seeded);
       }
-      return Promise.resolve({ total: 0, byType: {}, topTopics: [] });
+      return Promise.resolve({ total: 0, byType: {}, topTopics: [], topPeople: [] });
+    },
+    memoryRecall(input) {
+      recallCalls.push(input);
+      const items: MemoryRecallResponse["items"] = [];
+      for (const id of input.thoughtIds) {
+        const thought = rowsById.get(id);
+        if (thought === undefined || thought.userId !== input.userId) {
+          continue;
+        }
+        const extras = recallExtrasById.get(id);
+        items.push({
+          thought,
+          provenance: extras?.provenance ?? null,
+          usePolicy: extras?.usePolicy ?? null,
+        });
+      }
+      return Promise.resolve({ items });
     },
     memoryWriteback(input) {
       writebackCalls.push(input);
@@ -247,11 +276,17 @@ export function makeFakeConvex(): FakeConvex {
         updatedAt: Date.now(),
       };
       rowsById.set(id, row);
-      return Promise.resolve({ id });
+      return Promise.resolve({ thoughtId: id });
     },
     memoryReview(input) {
       reviewCalls.push(input);
-      return Promise.resolve({ id: `r_${input.thoughtId}` });
+      if (reviewResponseOverride !== null) {
+        return Promise.resolve(reviewResponseOverride);
+      }
+      return Promise.resolve({
+        reviewId: `r_${input.thoughtId}`,
+        promoted: input.promoteTo === "instruction",
+      });
     },
   };
 
@@ -265,7 +300,7 @@ export function makeFakeConvex(): FakeConvex {
     get reviewCalls(): readonly ConvexReviewInput[] {
       return reviewCalls;
     },
-    get listCalls(): readonly { userId: string; limit?: number }[] {
+    get listCalls(): readonly ConvexListFilter[] {
       return listCalls;
     },
     get statsCalls(): readonly { userId: string }[] {
@@ -273,6 +308,9 @@ export function makeFakeConvex(): FakeConvex {
     },
     get getByIdsCalls(): readonly { userId: string; ids: readonly string[] }[] {
       return getByIdsCalls;
+    },
+    get recallCalls(): readonly ConvexRecallInput[] {
+      return recallCalls;
     },
     seedThought(row: ConvexThoughtRow): void {
       rowsById.set(row._id, row);
@@ -296,17 +334,39 @@ export function makeFakeConvex(): FakeConvex {
         rowsById.set(thoughtId, row);
       }
     },
-    seedStats(
-      userId: string,
-      stats: {
-        total: number;
-        byType: Record<string, number>;
-        topTopics: readonly { topic: string; count: number }[];
-      },
-    ): void {
+    seedStats(userId: string, stats: ThoughtStatsResponse): void {
       statsByUser.set(userId, stats);
     },
+    seedRecallExtras(thoughtId: string, extras: Partial<RecallExtras>): void {
+      const existing = recallExtrasById.get(thoughtId) ?? { provenance: null, usePolicy: null };
+      recallExtrasById.set(thoughtId, {
+        provenance: extras.provenance ?? existing.provenance,
+        usePolicy: extras.usePolicy ?? existing.usePolicy,
+      });
+    },
+    setReviewResponse(response: { reviewId: string; promoted: boolean }): void {
+      reviewResponseOverride = response;
+    },
   });
+}
+
+function matchesFilters(row: ConvexThoughtRow, input: ConvexListFilter): boolean {
+  if (input.type !== undefined && row.metadata.type !== input.type) {
+    return false;
+  }
+  if (input.topic !== undefined && !row.metadata.topics.includes(input.topic)) {
+    return false;
+  }
+  if (input.person !== undefined && !row.metadata.people.includes(input.person)) {
+    return false;
+  }
+  if (input.days !== undefined) {
+    const cutoff = Date.now() - input.days * 24 * 60 * 60 * 1000;
+    if (row.createdAt < cutoff) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function emptyMetadata(): ThoughtMetadata {

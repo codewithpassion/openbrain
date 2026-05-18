@@ -170,20 +170,10 @@ Every outbound call to Convex carries:
 Every Vectorize call sets `namespace = userId`. Tests assert both per call —
 see `tests/deps/convex.test.ts` and `tests/deps/vectorize.test.ts`.
 
-## Known deviations from `packages/convex/convex/http.ts`
+## Convex HTTP surface alignment
 
-The MCP tool surface is wider than the Convex HTTP surface today. The Worker
-encodes the deltas via its `ConvexClient` interface; production rollout needs
-the Convex side to grow matching endpoints. See inline `DEVIATION:` comments
-in `src/mcp/tools/*` and `src/deps/convex.ts`. Tracked items:
-
-1. `capture-thought` calls `getByFingerprint`; needs `/api/thoughts/by-fingerprint`.
-2. `memory-recall` defaults `trustGrade=evidence`, `origin=human`; needs a join
-   with `memory_provenance` + `memory_use_policy` in `/api/memory/recall`.
-3. `memory-writeback` accepts `trustGrade` and `scopes` from the tool but
-   `/api/memory/writeback` doesn't yet persist them on `memory_use_policy`.
-4. `memory-review`'s `promoteTo` is not applied server-side yet.
-5. `thought-stats` returns `topPeople: []`; needs aggregation in
-   `/api/thoughts/stats`.
-6. `list-thoughts` filters by `days/type/topic/person` client-side; pushdown
-   would lower egress.
+The MCP tool surface and `packages/convex/convex/http.ts` are now in lockstep.
+Every parsed response in `src/deps/convex.ts` goes through a Zod schema in
+`src/deps/convex-schemas.ts` — the raw `fetch` call is the only untyped
+escape hatch. See `tests/deps/convex.test.ts` for the contract assertions
+(request body shape + response parsing) per endpoint.

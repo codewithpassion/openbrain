@@ -2,12 +2,14 @@ import { memoryRecallInputSchema, ThoughtId } from "@openbrains/shared";
 import { err, ok, type ToolEnvelope, type ToolTextResult } from "./types";
 
 /**
- * DEVIATION: `POST /api/memory/recall` does not currently join
- * `memory_provenance` / `memory_use_policy`. We default `trustGrade` to
- * "evidence" and `origin` to "human" per ARCHITECTURE.md §"Agent Memory
- * sidecars" (inferred/generated memory defaults to evidence; absence of a
- * provenance row implies a human capture). Open item: surface the joined
- * trust/origin from Convex.
+ * Recalls memory by semantic similarity. Embeds the query, asks Vectorize
+ * for the top-K ids in the user's namespace, then asks Convex to hydrate
+ * each id with its thought row + latest provenance + use-policy in one call.
+ * The recall trace is written by the Convex side (no separate client call).
+ *
+ * Origin/trustGrade defaults match ARCHITECTURE.md §"Agent Memory sidecars":
+ * absence of a provenance row implies a human capture; absence of a
+ * use-policy row defaults to `"evidence"`.
  */
 export async function memoryRecallHandler(
   rawInput: unknown,
@@ -32,26 +34,23 @@ export async function memoryRecallHandler(
   if (filtered.length === 0) {
     return ok({ results: [] });
   }
-  const rows = await envelope.deps.convex.getThoughtsByIds({
+  const { items } = await envelope.deps.convex.memoryRecall({
     userId,
-    ids: filtered.map((m) => m.id),
+    thoughtIds: filtered.map((m) => m.id),
+    query,
+    scores: filtered.map((m) => m.score),
   });
-  const byId = new Map(rows.map((r) => [r._id, r] as const));
-  const results = filtered
-    .map((m) => {
-      const row = byId.get(m.id);
-      if (row === undefined) {
-        return null;
-      }
-      return {
-        id: ThoughtId.parse(row._id),
-        score: m.score,
-        content: row.content,
-        trustGrade: "evidence" as const,
-        origin: "human" as const,
-        createdAt: row.createdAt,
-      };
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+  const scoreById = new Map(filtered.map((m) => [m.id, m.score] as const));
+  const results = items.map((item) => {
+    const score = scoreById.get(item.thought._id) ?? 0;
+    return {
+      id: ThoughtId.parse(item.thought._id),
+      score,
+      content: item.thought.content,
+      trustGrade: item.usePolicy?.trustGrade ?? ("evidence" as const),
+      origin: item.provenance?.origin ?? ("human" as const),
+      createdAt: item.thought.createdAt,
+    };
+  });
   return ok({ results });
 }

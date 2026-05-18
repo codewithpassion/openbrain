@@ -120,6 +120,7 @@ describe("OAuth prop propagation through MCP", () => {
               total: 0,
               byType: {},
               topTopics: [],
+              topPeople: [],
             }),
             { status: 200, headers: { "content-type": "application/json" } },
           ),

@@ -28,7 +28,6 @@ describe("memory-review tool", () => {
     expect(out.trustGrade).toBe("instruction");
     expect(convex.reviewCalls.length).toBe(1);
     expect(convex.reviewCalls[0]?.userId).toBe("user_a");
-    expect(convex.reviewCalls[0]?.reviewer).toBe("user_a");
     expect(convex.reviewCalls[0]?.status).toBe("confirmed");
     expect(convex.reviewCalls[0]?.promoteTo).toBe("instruction");
   });

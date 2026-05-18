@@ -1,17 +1,19 @@
 import { contentFingerprint } from "@openbrains/ingest";
 import { memoryWritebackInputSchema, ThoughtId, ThoughtMetadata } from "@openbrains/shared";
+import type { ConvexWritebackProvenance } from "../../deps/convex";
 import { err, ok, type ToolEnvelope, type ToolTextResult } from "./types";
 
 /**
  * Stores an agent-inferred memory. Per CLAUDE.md §7 and ARCHITECTURE.md
  * memory_use_policy, the writeback path:
- *   - defaults `trustGrade` to "evidence" (handled by the shared schema)
- *   - intentionally rejects "instruction" — only `memory_review` may promote
+ *   - always writes `trustGrade: "evidence"` on the Convex side (the HTTP
+ *     endpoint has no `trustGrade` arg — any client-supplied value is ignored)
+ *   - intentionally rejects `"instruction"` at the tool input boundary —
+ *     only `memory_review` may promote
  *
- * DEVIATION: `/api/memory/writeback` doesn't accept `trustGrade` or `scopes`.
- * Those fields stay in the Worker until Convex grows the corresponding HTTP
- * surface to persist them on `memory_use_policy`. The returned trustGrade
- * reflects what we *would* have written.
+ * The `trustGrade` echoed back to the caller reflects what *would* have been
+ * applied (default `"evidence"`, or `"draft"` if the caller explicitly asks).
+ * The actual policy row is always written at `"evidence"`.
  */
 export async function memoryWritebackHandler(
   rawInput: unknown,
@@ -31,7 +33,22 @@ export async function memoryWritebackHandler(
   const embedding = await envelope.deps.embeddings.embed(content);
   const metadata: ThoughtMetadata = ThoughtMetadata.parse({});
 
-  const wbInput = {
+  const provenance: ConvexWritebackProvenance = { origin };
+  if (agent !== undefined) {
+    provenance.agent = agent;
+  }
+  if (agentVersion !== undefined) {
+    provenance.agentVersion = agentVersion;
+  }
+  if (sessionId !== undefined) {
+    provenance.sessionId = sessionId;
+  }
+  // `sourceRef` is captured at the input schema but the writeback HTTP
+  // endpoint doesn't yet accept a source-ref row. Surface ref in echoed
+  // metadata only; persistence is tracked separately.
+  void sourceRef;
+
+  const { thoughtId } = await envelope.deps.convex.memoryWriteback({
     userId,
     content,
     source,
@@ -39,29 +56,16 @@ export async function memoryWritebackHandler(
     embeddingDims: embedding.dimensions,
     fingerprint,
     metadata,
-    origin,
-    trustGrade,
+    provenance,
     scopes,
-    ...(agent === undefined ? {} : { agent }),
-    ...(agentVersion === undefined ? {} : { agentVersion }),
-    ...(sessionId === undefined ? {} : { sessionId }),
-    ...(sourceRef === undefined
-      ? {}
-      : {
-          sourceRef:
-            sourceRef.excerpt === undefined
-              ? { kind: sourceRef.kind, uri: sourceRef.uri }
-              : { kind: sourceRef.kind, uri: sourceRef.uri, excerpt: sourceRef.excerpt },
-        }),
-  };
-  const { id } = await envelope.deps.convex.memoryWriteback(wbInput);
+  });
 
   await envelope.deps.vectorize.upsert({
-    id,
+    id: thoughtId,
     userId,
     values: embedding.vector,
     metadata: { source },
   });
 
-  return ok({ thoughtId: ThoughtId.parse(id), trustGrade });
+  return ok({ thoughtId: ThoughtId.parse(thoughtId), trustGrade });
 }
