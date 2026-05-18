@@ -5,7 +5,8 @@
   "packageManager": "bun@1.3.11",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "scripts"
   ],
   "scripts": {
     "build": "turbo run build",
@@ -16,6 +17,7 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
+    "smoke": "bun --filter @openbrains/scripts smoke",
     "clean": "turbo run clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {
