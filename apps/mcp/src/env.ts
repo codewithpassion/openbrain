@@ -40,4 +40,9 @@ export interface WorkerEnv {
   CLERK_CLIENT_ID: string;
   CLERK_CLIENT_SECRET: string;
   INTERNAL_API_SECRET: string;
+  /**
+   * Shared HMAC secret used to sign device-flow bearer tokens AND the
+   * short-lived approval-page session cookie. 32+ random bytes.
+   */
+  DEVICE_FLOW_SECRET: string;
 }

@@ -196,14 +196,63 @@ export const createThoughtInternal = internalMutation({
 });
 
 export const listThoughtsInternal = internalQuery({
-  args: { userId: v.string(), limit: v.optional(v.number()) },
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+    type: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    person: v.optional(v.string()),
+    days: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
+    // We index by (userId, createdAt) so the userId scope is pushed down.
+    // `type` is filtered at the index layer via `q.filter`. `topic` and
+    // `person` are JSON-array fields — Convex's `q.filter` lacks a native
+    // array-contains, so those filters run in JS on the index-scoped result.
+    // Cost: O(rows-for-user) when topic/person filters are used; acceptable
+    // for v1. A dedicated denormalized index would be the v2 fix.
+    let q = ctx.db
+      .query("thoughts")
+      .withIndex("by_user_created", (qq) => qq.eq("userId", args.userId))
+      .order("desc");
+    const typeFilter = args.type;
+    if (typeFilter !== undefined) {
+      q = q.filter((f) => f.eq(f.field("metadata.type"), typeFilter));
+    }
+    const cutoff = args.days === undefined ? undefined : Date.now() - args.days * 86400000;
+    if (cutoff !== undefined) {
+      q = q.filter((f) => f.gte(f.field("createdAt"), cutoff));
+    }
+    if (args.topic === undefined && args.person === undefined) {
+      return await q.take(limit);
+    }
+    const out: Doc<"thoughts">[] = [];
+    for await (const row of q) {
+      if (args.topic !== undefined && !row.metadata.topics.includes(args.topic)) {
+        continue;
+      }
+      if (args.person !== undefined && !row.metadata.people.includes(args.person)) {
+        continue;
+      }
+      out.push(row);
+      if (out.length >= limit) {
+        break;
+      }
+    }
+    return out;
+  },
+});
+
+export const getByFingerprintInternal = internalQuery({
+  args: { userId: v.string(), fingerprint: v.string() },
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("thoughts")
-      .withIndex("by_user_created", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .take(limit);
+      .withIndex("by_user_fingerprint", (q) =>
+        q.eq("userId", args.userId).eq("fingerprint", args.fingerprint),
+      )
+      .unique();
   },
 });
 
@@ -230,11 +279,15 @@ export const statsInternal = internalQuery({
       .collect();
     const byType = new Map<string, number>();
     const byTopic = new Map<string, number>();
+    const byPerson = new Map<string, number>();
     for (const r of rows) {
       const t = r.metadata.type ?? "unknown";
       byType.set(t, (byType.get(t) ?? 0) + 1);
       for (const topic of r.metadata.topics) {
         byTopic.set(topic, (byTopic.get(topic) ?? 0) + 1);
+      }
+      for (const person of r.metadata.people) {
+        byPerson.set(person, (byPerson.get(person) ?? 0) + 1);
       }
     }
     return {
@@ -244,6 +297,10 @@ export const statsInternal = internalQuery({
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([topic, count]) => ({ topic, count })),
+      topPeople: [...byPerson.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count })),
     };
   },
 });

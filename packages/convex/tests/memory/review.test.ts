@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ConvexError } from "convex/values";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { makeTest, TEST_USER_A, TEST_USER_B } from "../helpers/client";
 import { makeThought } from "../helpers/fixtures";
 
@@ -85,5 +85,64 @@ describe("memory/review", () => {
     await expect(ctxA.mutation(api.memory.review.promote, { thoughtId })).rejects.toThrow(
       /REQUIRES_REVIEW/,
     );
+  });
+
+  test("submitAndPromoteInternal records review and reports promoted:false without promoteTo", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const thoughtId = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.usePolicy.upsert, { thoughtId, scopes: [] });
+    const result = await t.mutation(internal.memory.review.submitAndPromoteInternal, {
+      userId: TEST_USER_A,
+      thoughtId,
+      status: "confirmed",
+    });
+    expect(result.reviewId).toBeTruthy();
+    expect(result.promoted).toBe(false);
+    const policy = await ctxA.query(api.memory.usePolicy.get, { thoughtId });
+    expect(policy?.trustGrade).toBe("evidence");
+  });
+
+  test("submitAndPromoteInternal promotes when confirmed + promoteTo=instruction", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const thoughtId = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.usePolicy.upsert, { thoughtId, scopes: [] });
+    const result = await t.mutation(internal.memory.review.submitAndPromoteInternal, {
+      userId: TEST_USER_A,
+      thoughtId,
+      status: "confirmed",
+      promoteTo: "instruction",
+    });
+    expect(result.promoted).toBe(true);
+    const policy = await ctxA.query(api.memory.usePolicy.get, { thoughtId });
+    expect(policy?.trustGrade).toBe("instruction");
+  });
+
+  test("submitAndPromoteInternal throws REQUIRES_REVIEW when status not confirmed but promoteTo set", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const thoughtId = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.usePolicy.upsert, { thoughtId, scopes: [] });
+    await expect(
+      t.mutation(internal.memory.review.submitAndPromoteInternal, {
+        userId: TEST_USER_A,
+        thoughtId,
+        status: "needs_revision",
+        promoteTo: "instruction",
+      }),
+    ).rejects.toThrow(/REQUIRES_REVIEW/);
+  });
+
+  test("submitAndPromoteInternal refuses cross-tenant thoughtId", async () => {
+    const t = makeTest();
+    const thoughtId = await seedThought(t, TEST_USER_A);
+    await expect(
+      t.mutation(internal.memory.review.submitAndPromoteInternal, {
+        userId: TEST_USER_B,
+        thoughtId,
+        status: "confirmed",
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
   });
 });

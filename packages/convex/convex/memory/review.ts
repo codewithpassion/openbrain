@@ -116,6 +116,85 @@ export const promote = mutation({
   },
 });
 
+/**
+ * Submit a review and (optionally) promote to instruction in one mutation —
+ * the atomic version used by `POST /api/memory/review`. The HTTP layer can't
+ * span two mutations transactionally, so the pair lives here.
+ *
+ * Gate: `promoteTo === "instruction"` requires `status === "confirmed"`;
+ * otherwise we throw REQUIRES_REVIEW so the HTTP caller can surface it.
+ */
+export const submitAndPromoteInternal = internalMutation({
+  args: {
+    userId: v.string(),
+    thoughtId: v.id("thoughts"),
+    status: statusValidator,
+    note: v.optional(v.string()),
+    promoteTo: v.optional(v.literal("instruction")),
+  },
+  handler: async (ctx, args) => {
+    const owning = await ctx.db.get(args.thoughtId);
+    if (owning === null || owning.userId !== args.userId) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Thought not found" });
+    }
+    if (args.promoteTo !== undefined && args.status !== "confirmed") {
+      throw new ConvexError({
+        code: "REQUIRES_REVIEW",
+        message: "Promotion requires a confirmed review",
+      });
+    }
+    const now = Date.now();
+    const row: {
+      thoughtId: Id<"thoughts">;
+      userId: string;
+      status: typeof args.status;
+      reviewer: string;
+      reviewedAt: number;
+      note?: string;
+    } = {
+      thoughtId: args.thoughtId,
+      userId: args.userId,
+      status: args.status,
+      // The reviewer is always the authenticated user; the Worker passes that
+      // userId through. No separate reviewer field needed at the HTTP layer.
+      reviewer: args.userId,
+      reviewedAt: now,
+    };
+    if (args.note !== undefined) {
+      row.note = args.note;
+    }
+    const reviewId = await ctx.db.insert("memory_review", row);
+    await writeAudit(ctx, {
+      thoughtId: args.thoughtId,
+      userId: args.userId,
+      action: "review.submit",
+      actor: args.userId,
+      diff: { status: args.status, reviewer: args.userId },
+    });
+
+    if (args.promoteTo !== "instruction" || args.status !== "confirmed") {
+      return { reviewId, promoted: false };
+    }
+
+    const policy = await ctx.db
+      .query("memory_use_policy")
+      .withIndex("by_thought", (q) => q.eq("thoughtId", args.thoughtId))
+      .unique();
+    if (policy === null || policy.userId !== args.userId) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Use policy not found" });
+    }
+    await ctx.db.patch(policy._id, { trustGrade: "instruction" });
+    await writeAudit(ctx, {
+      thoughtId: args.thoughtId,
+      userId: args.userId,
+      action: "review.promote",
+      actor: args.userId,
+      diff: { trustGrade: "instruction" },
+    });
+    return { reviewId, promoted: true };
+  },
+});
+
 export const submitInternal = internalMutation({
   args: {
     userId: v.string(),

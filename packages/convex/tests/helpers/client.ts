@@ -24,6 +24,8 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./memory/sourceRefs.ts": () => import("../../convex/memory/sourceRefs"),
   "./memory/recallTraces.ts": () => import("../../convex/memory/recallTraces"),
   "./memory/audit.ts": () => import("../../convex/memory/audit"),
+  "./memory/recall.ts": () => import("../../convex/memory/recall"),
+  "./memory/writeback.ts": () => import("../../convex/memory/writeback"),
 };
 
 export type SchemaType = typeof schema;

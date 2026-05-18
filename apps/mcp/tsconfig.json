@@ -7,5 +7,14 @@
     "noEmit": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules", "dist", ".turbo", ".wrangler"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".turbo",
+    ".wrangler",
+    // Integration tests run under vitest-pool-workers and reference the
+    // `cloudflare:test` virtual module which Bun's tsc cannot resolve.
+    // They have their own tsconfig (`tests/integration/tsconfig.json`).
+    "tests/integration/**/*"
+  ]
 }

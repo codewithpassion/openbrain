@@ -29,6 +29,53 @@ returns `null` (never the row) for unknown or expired keys.
 Trust grade defaults to `evidence`; promotion to `instruction` is gated on a
 confirmed `memory_review` row (see `memory/review.ts#promote`).
 
+## HTTP endpoints (MCP Worker surface)
+
+All endpoints require both headers (`X-OpenBrains-Internal-Secret` matching
+`INTERNAL_API_SECRET`, `X-OpenBrains-User-Id` from the OAuth token) and return
+JSON. Missing/wrong secret → 401 with no body. Secret OK but user-id missing
+→ 400.
+
+| Method | Path | Body / Query | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/thoughts` | `{ content, source, embeddingModel, embeddingDims, fingerprint, metadata }` | `{ id }` |
+| POST | `/api/thoughts/search` | `{ ids: string[] }` | `{ rows: Thought[] }` |
+| GET | `/api/thoughts` | `?limit=N` | `{ rows: Thought[] }` (legacy; prefer `/list`) |
+| POST | `/api/thoughts/list` | `{ limit?, type?, topic?, person?, days? }` | `{ rows: Thought[] }` |
+| POST | `/api/thoughts/by-fingerprint` | `{ fingerprint }` | `{ thought: Thought \| null }` |
+| GET | `/api/thoughts/stats` | — | `{ total, byType, topTopics, topPeople }` |
+| POST | `/api/memory/recall` | `{ thoughtIds, query?, scores? }` | `{ items: { thought, provenance, usePolicy }[] }` |
+| POST | `/api/memory/writeback` | `{ ...thought, provenance: { origin, agent?, ... }, scopes? }` | `{ thoughtId }` |
+| POST | `/api/memory/review` | `{ thoughtId, status, note?, promoteTo? }` | `{ reviewId, promoted }` |
+
+### Filter pushdown (`/api/thoughts/list`)
+
+`userId` is pushed down via the `by_user_created` index. `type` and `days`
+push down through `.filter()`. `topic` and `person` filter in JS over the
+index-scoped result — Convex's expression DSL has no native array-contains.
+The cost is bounded by the per-user row count; a denormalized
+topic/person-by-user index is the v2 fix.
+
+### Recall traces (`/api/memory/recall`)
+
+The recall endpoint writes one `memory_recall_traces` row per *kept* thought —
+cross-tenant ids are silently dropped (no existence leak) and never produce a
+trace. The internal mutation runs the join and trace writes in a single Convex
+transaction so the audit trail is always consistent with what the client saw.
+
+The MCP Worker may not yet send `query`/`scores` (vector search context).
+Both are optional in the request; when absent the trace records `query=""`
+and `score=0`. Worker upgrade is tracked separately.
+
+### Writeback trust grade (`/api/memory/writeback`)
+
+CLAUDE.md §7 mandates that the writeback path always writes
+`trustGrade: "evidence"`. The internal mutation has **no** `trustGrade`
+argument — any incoming field by that name is structurally ignored. The only
+path to `instruction` is `POST /api/memory/review` with
+`status: "confirmed"` + `promoteTo: "instruction"`. That endpoint returns 422
+`{ error: "REQUIRES_REVIEW" }` if the gate is violated.
+
 ## Layout
 
 ```

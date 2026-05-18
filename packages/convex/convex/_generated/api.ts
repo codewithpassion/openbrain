@@ -11,10 +11,12 @@ import type * as apiKeys from "../apiKeys.js";
 import type * as http from "../http.js";
 import type * as memory_audit from "../memory/audit.js";
 import type * as memory_provenance from "../memory/provenance.js";
+import type * as memory_recall from "../memory/recall.js";
 import type * as memory_recallTraces from "../memory/recallTraces.js";
 import type * as memory_review from "../memory/review.js";
 import type * as memory_sourceRefs from "../memory/sourceRefs.js";
 import type * as memory_usePolicy from "../memory/usePolicy.js";
+import type * as memory_writeback from "../memory/writeback.js";
 import type * as thoughts from "../thoughts.js";
 
 declare const fullApi: ApiFromModules<{
@@ -27,6 +29,8 @@ declare const fullApi: ApiFromModules<{
   "memory/sourceRefs": typeof memory_sourceRefs;
   "memory/recallTraces": typeof memory_recallTraces;
   "memory/audit": typeof memory_audit;
+  "memory/recall": typeof memory_recall;
+  "memory/writeback": typeof memory_writeback;
 }>;
 
 // biome-ignore lint/suspicious/noExplicitAny: FunctionReference<any> is the canonical Convex codegen output

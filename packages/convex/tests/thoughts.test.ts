@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ConvexError } from "convex/values";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { makeTest, TEST_USER_A, TEST_USER_B } from "./helpers/client";
 import { makeThought } from "./helpers/fixtures";
 
@@ -146,6 +147,126 @@ describe("thoughts", () => {
     await ctxA.mutation(api.thoughts.attachVectorizeId, { id, vectorizeId: "vec-123" });
     const got = await ctxA.query(api.thoughts.getThought, { id });
     expect(got?.vectorizeId).toBe("vec-123");
+  });
+
+  test("getByFingerprintInternal returns the row scoped to userId", async () => {
+    const t = makeTest();
+    const fx = makeThought(TEST_USER_A, { fingerprint: "z".repeat(64) });
+    await t.withIdentity({ subject: TEST_USER_A }).mutation(api.thoughts.createThought, {
+      content: fx.content,
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fx.fingerprint,
+      metadata: fx.metadata,
+    });
+    const own = await t.query(internal.thoughts.getByFingerprintInternal, {
+      userId: TEST_USER_A,
+      fingerprint: fx.fingerprint,
+    });
+    expect(own?.userId).toBe(TEST_USER_A);
+    const other = await t.query(internal.thoughts.getByFingerprintInternal, {
+      userId: TEST_USER_B,
+      fingerprint: fx.fingerprint,
+    });
+    expect(other).toBeNull();
+  });
+
+  test("listThoughtsInternal filters by type/topic/person and days", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const fx1 = makeThought(TEST_USER_A, {
+      fingerprint: "1".repeat(64),
+      content: "idea-row",
+      metadata: {
+        type: "idea",
+        topics: ["alpha"],
+        people: ["alice"],
+        action_items: [],
+        dates_mentioned: [],
+      },
+    });
+    const fx2 = makeThought(TEST_USER_A, {
+      fingerprint: "2".repeat(64),
+      content: "task-row",
+      metadata: {
+        type: "task",
+        topics: ["beta"],
+        people: ["bob"],
+        action_items: [],
+        dates_mentioned: [],
+      },
+    });
+    for (const fx of [fx1, fx2]) {
+      await ctxA.mutation(api.thoughts.createThought, {
+        content: fx.content,
+        source: fx.source,
+        embeddingModel: fx.embeddingModel,
+        embeddingDims: fx.embeddingDims,
+        fingerprint: fx.fingerprint,
+        metadata: fx.metadata,
+      });
+    }
+    const byType = await t.query(internal.thoughts.listThoughtsInternal, {
+      userId: TEST_USER_A,
+      type: "task",
+    });
+    expect(byType.map((r) => r.content)).toEqual(["task-row"]);
+    const byTopic = await t.query(internal.thoughts.listThoughtsInternal, {
+      userId: TEST_USER_A,
+      topic: "alpha",
+    });
+    expect(byTopic.map((r) => r.content)).toEqual(["idea-row"]);
+    const byPerson = await t.query(internal.thoughts.listThoughtsInternal, {
+      userId: TEST_USER_A,
+      person: "bob",
+    });
+    expect(byPerson.map((r) => r.content)).toEqual(["task-row"]);
+  });
+
+  test("statsInternal returns topPeople sorted by count desc", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const seeds: { fp: string; people: string[] }[] = [
+      { fp: "1".repeat(64), people: ["alice"] },
+      { fp: "2".repeat(64), people: ["alice", "bob"] },
+      { fp: "3".repeat(64), people: ["bob"] },
+    ];
+    for (const s of seeds) {
+      const fx = makeThought(TEST_USER_A, {
+        fingerprint: s.fp,
+        metadata: {
+          topics: [],
+          people: s.people,
+          action_items: [],
+          dates_mentioned: [],
+        },
+      });
+      await ctxA.mutation(api.thoughts.createThought, {
+        content: fx.content,
+        source: fx.source,
+        embeddingModel: fx.embeddingModel,
+        embeddingDims: fx.embeddingDims,
+        fingerprint: fx.fingerprint,
+        metadata: fx.metadata,
+      });
+    }
+    const stats = await t.query(internal.thoughts.statsInternal, { userId: TEST_USER_A });
+    expect(stats.topPeople).toEqual([
+      { name: "alice", count: 2 },
+      { name: "bob", count: 2 },
+    ]);
+  });
+
+  test("getByFingerprintInternal returns null when no match", async () => {
+    const t = makeTest();
+    const _unused: Id<"thoughts"> | null = null;
+    void _unused;
+    const got = await t.query(internal.thoughts.getByFingerprintInternal, {
+      userId: TEST_USER_A,
+      fingerprint: "x".repeat(64),
+    });
+    expect(got).toBeNull();
   });
 
   test("createThought writes a memory_audit row", async () => {

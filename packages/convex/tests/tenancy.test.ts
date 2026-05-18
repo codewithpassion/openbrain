@@ -8,6 +8,13 @@
  * apiKeys mutation is the documented exception — it MUST be callable without
  * identity (it's how identity is established from a key) so it is not in
  * this table.
+ *
+ * NOTE: the HTTP-layer functions in `memory/recall.ts`, `memory/writeback.ts`,
+ * and the new `*Internal` variants in `thoughts.ts` / `memory/review.ts` are
+ * exclusively `internalMutation` / `internalQuery`. They are not on `api.*`
+ * and cannot be reached without the X-OpenBrains-Internal-Secret trust
+ * boundary, so they don't fit this canary's shape. Their tenant-safety is
+ * covered by `tests/http.test.ts` (auth headers + cross-tenant id drop).
  */
 import { describe, expect, test } from "bun:test";
 import { ConvexError } from "convex/values";

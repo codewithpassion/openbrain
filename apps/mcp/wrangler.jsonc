@@ -7,6 +7,12 @@
   "observability": { "enabled": true },
   "ai": { "binding": "AI" },
   "vectorize": [{ "binding": "VECTORIZE", "index_name": "thoughts-v1" }],
+  // Single KV binding shared by the OAuth provider and the device-flow code.
+  // The device-flow keys are namespaced under `device:` and `device_user_code:`
+  // prefixes (see `src/auth/device-store.ts`) so they never collide with the
+  // provider's own client / grant / token records. Reusing one binding keeps
+  // operational complexity low — one namespace to provision, one to back up,
+  // one TTL story to reason about.
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_ME" }],
   "vars": {
     "CONVEX_URL": "https://example.convex.cloud",
