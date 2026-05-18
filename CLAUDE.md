@@ -43,8 +43,10 @@ Coverage isn't the goal — meaningful, behavior-anchored tests are. One asserti
 
 - `noExplicitAny` is `error` in Biome.
 - `noImplicitAny`, `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` all on.
-- If a type is genuinely unknown at a boundary, use `unknown` and narrow with a Zod schema or a type guard. **Not** `any`, **not** `@ts-expect-error`, **not** `as` casts that lie.
+- If a type is genuinely unknown at a boundary, use `unknown` and narrow with a Zod schema or a type guard. **Not** `any`, **not** `@ts-ignore`, **not** `as` casts that lie.
 - External libraries with broken types: declare a narrow ambient type in `src/types/<lib>.d.ts` rather than spreading `any` through the codebase.
+- **`@ts-expect-error` is permitted in tests only**, when asserting a type-level negative case (e.g. proving a branded type prevents a raw string from being passed). Never in production code.
+- **Convex `v.any()` is not TypeScript `any`** — it's a validator namespace. The Convex schema may use `v.any()` for genuinely-opaque fields (e.g. audit-log diffs); the corresponding Zod schema in `packages/shared` must use `z.unknown()` and downstream code must narrow.
 
 ### 3. Surgical changes, simplicity first
 
@@ -132,6 +134,13 @@ bun run lint:fix            # auto-fix what Biome can
 bun run test                # tests across the workspace (turbo)
 bun --filter <name> <cmd>   # run a script in a specific workspace
 ```
+
+## Conventions
+
+- **Filenames**: kebab-case for source and test files (Biome enforces `kebab-case | camelCase | PascalCase` only — no snake_case, no UPPERCASE).
+- **Exported symbols**: camelCase for values (`searchThoughtsInputSchema`), PascalCase for types and classes (`SearchThoughtsInput`, `OpenBrainsError`).
+- **Branded IDs**: when comparing a `ThoughtId` against a string literal in tests, bind to `const id: string = ThoughtId.parse(...)` to strip the brand at the variable boundary — never use `as string` to launder the type.
+- **Conflict resolution**: when a task's explicit "files to create" list disagrees with ARCHITECTURE.md or another spec section, **files-to-create wins**. The agent flags the gap in its final report. Do not silently expand scope.
 
 ## Working with sub-agents
 
