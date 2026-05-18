@@ -1,0 +1,23 @@
+{
+  "name": "@openbrains/convex",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "convex dev",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "deploy": "convex deploy",
+    "clean": "rm -rf .convex .turbo convex/_generated"
+  },
+  "dependencies": {
+    "@openbrains/shared": "workspace:*",
+    "convex": "^1.39.1"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/bun": "latest",
+    "convex-test": "^0.0.53",
+    "typescript": "^5.7.0"
+  }
+}

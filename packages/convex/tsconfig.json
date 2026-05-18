@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  },
+  "include": ["convex/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", ".turbo", ".convex"]
+}
