@@ -4,7 +4,7 @@ import { captureThoughtOutputSchema } from "@openbrains/shared";
 import { createVectorizeClient } from "../../../src/deps/vectorize";
 import { captureThoughtHandler } from "../../../src/mcp/tools/capture-thought";
 import { makeAuthContext } from "../../helpers/auth";
-import { makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
+import { defaultExtras, makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
 
 function makeEnvelope(userId: string) {
   const convex = makeFakeConvex();
@@ -13,7 +13,7 @@ function makeEnvelope(userId: string) {
   const embeddings = createFakeEmbedder({ dimensions: 1024 });
   return {
     envelope: {
-      deps: { convex, vectorize, embeddings },
+      deps: { convex, vectorize, embeddings, ...defaultExtras() },
       auth: makeAuthContext(userId),
     },
     convex,

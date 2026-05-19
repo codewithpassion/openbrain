@@ -1,6 +1,12 @@
 export {
   type ConvexCaptureInput,
   type ConvexClient,
+  type ConvexEntityMentionRow,
+  type ConvexEntityRelationRow,
+  type ConvexEntityRelationsInput,
+  type ConvexEntityRow,
+  type ConvexGetEntityInput,
+  type ConvexListEntitiesInput,
   ConvexHttpError,
   type ConvexListFilter,
   type ConvexRecallInput,

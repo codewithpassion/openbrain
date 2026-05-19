@@ -20,7 +20,13 @@ import type { z } from "zod";
 import {
   ByFingerprintResponseSchema,
   CaptureResponseSchema,
+  type ConvexEntityMentionRow,
+  type ConvexEntityRelationRow,
+  type ConvexEntityRow,
   type ConvexThoughtRow,
+  EntityGetResponseSchema,
+  EntityListResponseSchema,
+  EntityRelationsResponseSchema,
   type MemoryRecallResponse,
   MemoryRecallResponseSchema,
   type MemoryReviewStatus,
@@ -33,7 +39,15 @@ import {
   WritebackResponseSchema,
 } from "./convex-schemas";
 
-export type { ConvexThoughtRow, MemoryRecallResponse, ReviewResponse, ThoughtStatsResponse };
+export type {
+  ConvexEntityMentionRow,
+  ConvexEntityRelationRow,
+  ConvexEntityRow,
+  ConvexThoughtRow,
+  MemoryRecallResponse,
+  ReviewResponse,
+  ThoughtStatsResponse,
+};
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -91,6 +105,24 @@ export interface ConvexRecallInput {
   scores?: readonly number[];
 }
 
+export interface ConvexListEntitiesInput {
+  userId: string;
+  kind?: string;
+  limit?: number;
+}
+
+export interface ConvexGetEntityInput {
+  userId: string;
+  entityId: string;
+  mentionsLimit?: number;
+}
+
+export interface ConvexEntityRelationsInput {
+  userId: string;
+  entityId: string;
+  limit?: number;
+}
+
 export interface ConvexClient {
   captureThought(input: ConvexCaptureInput): Promise<{ id: string }>;
   /**
@@ -112,6 +144,15 @@ export interface ConvexClient {
   memoryRecall(input: ConvexRecallInput): Promise<MemoryRecallResponse>;
   memoryWriteback(input: ConvexWritebackInput): Promise<{ thoughtId: string }>;
   memoryReview(input: ConvexReviewInput): Promise<ReviewResponse>;
+  listEntities(input: ConvexListEntitiesInput): Promise<readonly ConvexEntityRow[]>;
+  getEntity(input: ConvexGetEntityInput): Promise<{
+    entity: ConvexEntityRow | null;
+    mentions: readonly ConvexEntityMentionRow[];
+  }>;
+  entityRelations(input: ConvexEntityRelationsInput): Promise<{
+    outgoing: readonly ConvexEntityRelationRow[];
+    incoming: readonly ConvexEntityRelationRow[];
+  }>;
 }
 
 interface ConvexClientOptions {
@@ -362,6 +403,41 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
         throw new ConvexHttpError(`convex /api/memory/review failed: ${status.toString()}`, status);
       }
       return ReviewResponseSchema.parse(json);
+    },
+    async listEntities(input) {
+      const body: { kind?: string; limit?: number } = {};
+      if (input.kind !== undefined) {
+        body.kind = input.kind;
+      }
+      if (input.limit !== undefined) {
+        body.limit = input.limit;
+      }
+      const { rows } = await post(
+        "/api/entities/list",
+        input.userId,
+        body,
+        EntityListResponseSchema,
+      );
+      return rows;
+    },
+    async getEntity(input) {
+      const body: { entityId: string; mentionsLimit?: number } = { entityId: input.entityId };
+      if (input.mentionsLimit !== undefined) {
+        body.mentionsLimit = input.mentionsLimit;
+      }
+      return await post("/api/entities/get", input.userId, body, EntityGetResponseSchema);
+    },
+    async entityRelations(input) {
+      const body: { entityId: string; limit?: number } = { entityId: input.entityId };
+      if (input.limit !== undefined) {
+        body.limit = input.limit;
+      }
+      return await post(
+        "/api/entities/relations",
+        input.userId,
+        body,
+        EntityRelationsResponseSchema,
+      );
     },
   };
 }

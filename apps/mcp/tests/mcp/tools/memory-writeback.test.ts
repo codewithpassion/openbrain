@@ -4,7 +4,7 @@ import { memoryWritebackOutputSchema } from "@openbrains/shared";
 import { createVectorizeClient } from "../../../src/deps/vectorize";
 import { memoryWritebackHandler } from "../../../src/mcp/tools/memory-writeback";
 import { makeAuthContext } from "../../helpers/auth";
-import { makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
+import { defaultExtras, makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
 
 function setup(userId: string) {
   const convex = makeFakeConvex();
@@ -12,7 +12,10 @@ function setup(userId: string) {
   const vectorize = createVectorizeClient(binding);
   const embeddings = createFakeEmbedder({ dimensions: 1024 });
   return {
-    envelope: { deps: { convex, vectorize, embeddings }, auth: makeAuthContext(userId) },
+    envelope: {
+      deps: { convex, vectorize, embeddings, ...defaultExtras() },
+      auth: makeAuthContext(userId),
+    },
     convex,
     binding,
   };

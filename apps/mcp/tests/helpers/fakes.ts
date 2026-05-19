@@ -1,8 +1,20 @@
-import type { WorkersAiBinding } from "@openbrains/ingest";
+import {
+  type BrainDumpSplitter,
+  createFakeBrainDumpSplitter,
+  createFakeMetadataExtractor,
+  type MetadataExtractor,
+  type WorkersAiBinding,
+} from "@openbrains/ingest";
 import type { ThoughtMetadata } from "@openbrains/shared";
 import type {
   ConvexCaptureInput,
   ConvexClient,
+  ConvexEntityMentionRow,
+  ConvexEntityRelationRow,
+  ConvexEntityRelationsInput,
+  ConvexEntityRow,
+  ConvexGetEntityInput,
+  ConvexListEntitiesInput,
   ConvexListFilter,
   ConvexRecallInput,
   ConvexReviewInput,
@@ -152,6 +164,9 @@ export interface FakeConvex extends ConvexClient {
   readonly statsCalls: readonly { userId: string }[];
   readonly getByIdsCalls: readonly { userId: string; ids: readonly string[] }[];
   readonly recallCalls: readonly ConvexRecallInput[];
+  readonly listEntitiesCalls: readonly ConvexListEntitiesInput[];
+  readonly getEntityCalls: readonly ConvexGetEntityInput[];
+  readonly entityRelationsCalls: readonly ConvexEntityRelationsInput[];
   seedThought(row: ConvexThoughtRow): void;
   seedFingerprintHit(userId: string, fingerprint: string, thoughtId: string): void;
   seedStats(userId: string, stats: ThoughtStatsResponse): void;
@@ -159,6 +174,9 @@ export interface FakeConvex extends ConvexClient {
   seedRecallExtras(thoughtId: string, extras: Partial<RecallExtras>): void;
   /** Override the review response (default `{ reviewId, promoted: promoteTo === "instruction" }`). */
   setReviewResponse(response: { reviewId: string; promoted: boolean }): void;
+  seedEntity(row: ConvexEntityRow): void;
+  seedEntityMention(row: ConvexEntityMentionRow): void;
+  seedEntityRelation(row: ConvexEntityRelationRow): void;
 }
 
 export function makeFakeConvex(): FakeConvex {
@@ -173,6 +191,12 @@ export function makeFakeConvex(): FakeConvex {
   const fingerprintIndex = new Map<string, string>(); // `${userId}::${fp}` -> thoughtId
   const statsByUser = new Map<string, ThoughtStatsResponse>();
   const recallExtrasById = new Map<string, RecallExtras>();
+  const entitiesById = new Map<string, ConvexEntityRow>();
+  const entityMentions: ConvexEntityMentionRow[] = [];
+  const entityRelations: ConvexEntityRelationRow[] = [];
+  const listEntitiesCalls: ConvexListEntitiesInput[] = [];
+  const getEntityCalls: ConvexGetEntityInput[] = [];
+  const entityRelationsCalls: ConvexEntityRelationsInput[] = [];
   let reviewResponseOverride: { reviewId: string; promoted: boolean } | null = null;
   let idCounter = 0;
   function nextId(): string {
@@ -288,6 +312,59 @@ export function makeFakeConvex(): FakeConvex {
         promoted: input.promoteTo === "instruction",
       });
     },
+    listEntities(input) {
+      listEntitiesCalls.push({
+        userId: input.userId,
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      });
+      let rows = [...entitiesById.values()]
+        .filter((e) => e.userId === input.userId)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      if (input.kind !== undefined) {
+        rows = rows.filter((e) => e.kind === input.kind);
+      }
+      const limit = input.limit ?? 100;
+      return Promise.resolve(rows.slice(0, limit));
+    },
+    getEntity(input) {
+      getEntityCalls.push({
+        userId: input.userId,
+        entityId: input.entityId,
+        ...(input.mentionsLimit === undefined ? {} : { mentionsLimit: input.mentionsLimit }),
+      });
+      const entity = entitiesById.get(input.entityId);
+      if (entity === undefined || entity.userId !== input.userId) {
+        return Promise.resolve({ entity: null, mentions: [] });
+      }
+      const limit = input.mentionsLimit ?? 50;
+      const mentions = entityMentions
+        .filter((m) => m.userId === input.userId && m.entityId === input.entityId)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit);
+      return Promise.resolve({ entity, mentions });
+    },
+    entityRelations(input) {
+      entityRelationsCalls.push({
+        userId: input.userId,
+        entityId: input.entityId,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      });
+      const entity = entitiesById.get(input.entityId);
+      if (entity === undefined || entity.userId !== input.userId) {
+        return Promise.resolve({ outgoing: [], incoming: [] });
+      }
+      const limit = input.limit ?? 100;
+      const outgoing = entityRelations
+        .filter((r) => r.userId === input.userId && r.fromEntityId === input.entityId)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, limit);
+      const incoming = entityRelations
+        .filter((r) => r.userId === input.userId && r.toEntityId === input.entityId)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, limit);
+      return Promise.resolve({ outgoing, incoming });
+    },
   };
 
   return Object.assign(client, {
@@ -347,6 +424,24 @@ export function makeFakeConvex(): FakeConvex {
     setReviewResponse(response: { reviewId: string; promoted: boolean }): void {
       reviewResponseOverride = response;
     },
+    get listEntitiesCalls(): readonly ConvexListEntitiesInput[] {
+      return listEntitiesCalls;
+    },
+    get getEntityCalls(): readonly ConvexGetEntityInput[] {
+      return getEntityCalls;
+    },
+    get entityRelationsCalls(): readonly ConvexEntityRelationsInput[] {
+      return entityRelationsCalls;
+    },
+    seedEntity(row: ConvexEntityRow): void {
+      entitiesById.set(row._id, row);
+    },
+    seedEntityMention(row: ConvexEntityMentionRow): void {
+      entityMentions.push(row);
+    },
+    seedEntityRelation(row: ConvexEntityRelationRow): void {
+      entityRelations.push(row);
+    },
   });
 }
 
@@ -367,6 +462,18 @@ function matchesFilters(row: ConvexThoughtRow, input: ConvexListFilter): boolean
     }
   }
   return true;
+}
+
+/**
+ * Default LLM-adapter fakes for `ToolDeps`. Spread into a deps object alongside
+ * convex/vectorize/embeddings. Tests that exercise the LLM tools override with
+ * a programmable extractor.
+ */
+export function defaultExtras(): { metadata: MetadataExtractor; splitter: BrainDumpSplitter } {
+  return {
+    metadata: createFakeMetadataExtractor(),
+    splitter: createFakeBrainDumpSplitter(),
+  };
 }
 
 export function emptyMetadata(): ThoughtMetadata {

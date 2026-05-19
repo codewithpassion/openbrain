@@ -4,7 +4,12 @@ import { memoryRecallOutputSchema } from "@openbrains/shared";
 import { createVectorizeClient } from "../../../src/deps/vectorize";
 import { memoryRecallHandler } from "../../../src/mcp/tools/memory-recall";
 import { makeAuthContext } from "../../helpers/auth";
-import { emptyMetadata, makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
+import {
+  defaultExtras,
+  emptyMetadata,
+  makeFakeConvex,
+  makeFakeVectorize,
+} from "../../helpers/fakes";
 
 function setup(userId: string) {
   const convex = makeFakeConvex();
@@ -12,7 +17,10 @@ function setup(userId: string) {
   const vectorize = createVectorizeClient(binding);
   const embeddings = createFakeEmbedder({ dimensions: 1024 });
   return {
-    envelope: { deps: { convex, vectorize, embeddings }, auth: makeAuthContext(userId) },
+    envelope: {
+      deps: { convex, vectorize, embeddings, ...defaultExtras() },
+      auth: makeAuthContext(userId),
+    },
     convex,
     binding,
   };

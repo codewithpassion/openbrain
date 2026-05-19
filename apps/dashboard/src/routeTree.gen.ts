@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThoughtsRouteImport } from './routes/thoughts'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as GraphRouteImport } from './routes/graph'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
@@ -30,6 +31,11 @@ const StatsRoute = StatsRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GraphRoute = GraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiKeysRoute = ApiKeysRouteImport.update({
@@ -56,6 +62,7 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/graph': typeof GraphRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/graph': typeof GraphRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/graph': typeof GraphRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api-keys'
+    | '/graph'
     | '/search'
     | '/stats'
     | '/thoughts'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api-keys'
+    | '/graph'
     | '/search'
     | '/stats'
     | '/thoughts'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api-keys'
+    | '/graph'
     | '/search'
     | '/stats'
     | '/thoughts'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiKeysRoute: typeof ApiKeysRoute
+  GraphRoute: typeof GraphRoute
   SearchRoute: typeof SearchRoute
   StatsRoute: typeof StatsRoute
   ThoughtsRoute: typeof ThoughtsRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/graph': {
+      id: '/graph'
+      path: '/graph'
+      fullPath: '/graph'
+      preLoaderRoute: typeof GraphRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api-keys': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
+  GraphRoute: GraphRoute,
   SearchRoute: SearchRoute,
   StatsRoute: StatsRoute,
   ThoughtsRoute: ThoughtsRoute,

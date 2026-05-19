@@ -239,6 +239,15 @@ export function makeFakeConvex(): FakeConvex {
         promoted: input.promoteTo === "instruction",
       });
     },
+    listEntities() {
+      return Promise.resolve([]);
+    },
+    getEntity() {
+      return Promise.resolve({ entity: null, mentions: [] });
+    },
+    entityRelations() {
+      return Promise.resolve({ outgoing: [], incoming: [] });
+    },
   };
 
   return Object.assign(client, {

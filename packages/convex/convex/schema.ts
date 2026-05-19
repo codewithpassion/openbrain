@@ -108,4 +108,44 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_hash", ["hash"]),
+
+  // Phase C: entity model. `kind` is a free-form string so domain extensions
+  // can introduce new kinds (CRM adds "person"/"org" subtypes; Life Engine
+  // adds "habit"/"goal"). Canonical names are unique per (user, kind, name).
+  entities: defineTable({
+    userId: v.string(),
+    kind: v.string(),
+    canonicalName: v.string(),
+    aliases: v.array(v.string()),
+    metadata: v.any(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_kind_name", ["userId", "kind", "canonicalName"])
+    .index("by_user_kind", ["userId", "kind"])
+    .index("by_user_updated", ["userId", "updatedAt"]),
+
+  entity_mentions: defineTable({
+    userId: v.string(),
+    entityId: v.id("entities"),
+    thoughtId: v.id("thoughts"),
+    span: v.optional(v.object({ start: v.number(), end: v.number() })),
+    createdAt: v.number(),
+  })
+    .index("by_user_entity", ["userId", "entityId"])
+    .index("by_user_thought", ["userId", "thoughtId"]),
+
+  entity_relations: defineTable({
+    userId: v.string(),
+    fromEntityId: v.id("entities"),
+    toEntityId: v.id("entities"),
+    kind: v.string(),
+    evidenceThoughtIds: v.array(v.id("thoughts")),
+    confidence: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_from", ["userId", "fromEntityId"])
+    .index("by_user_to", ["userId", "toEntityId"])
+    .index("by_user_kind", ["userId", "kind"]),
 });

@@ -10,7 +10,9 @@
 
 import type * as _lib_audit from "../_lib/audit.js";
 import type * as _lib_identity from "../_lib/identity.js";
+import type * as aiAction from "../aiAction.js";
 import type * as apiKeys from "../apiKeys.js";
+import type * as entities from "../entities.js";
 import type * as http from "../http.js";
 import type * as memory_audit from "../memory/audit.js";
 import type * as memory_provenance from "../memory/provenance.js";
@@ -31,7 +33,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   "_lib/audit": typeof _lib_audit;
   "_lib/identity": typeof _lib_identity;
+  aiAction: typeof aiAction;
   apiKeys: typeof apiKeys;
+  entities: typeof entities;
   http: typeof http;
   "memory/audit": typeof memory_audit;
   "memory/provenance": typeof memory_provenance;

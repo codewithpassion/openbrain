@@ -114,3 +114,59 @@ export const ReviewRequiresReviewErrorSchema = z.object({
 
 /** Re-export the review-status enum so callers don't need a second import. */
 export { MemoryReviewStatus };
+
+/* --------------------------------------------------------------------------
+ * Phase C entity wire schemas
+ * ------------------------------------------------------------------------ */
+
+export const ConvexEntityRowSchema = z.object({
+  _id: z.string().min(1),
+  _creationTime: z.number().optional(),
+  userId: z.string().min(1),
+  kind: z.string().min(1),
+  canonicalName: z.string().min(1),
+  aliases: z.array(z.string()),
+  metadata: z.unknown(),
+  createdAt: z.number().positive(),
+  updatedAt: z.number().positive(),
+});
+export type ConvexEntityRow = z.infer<typeof ConvexEntityRowSchema>;
+
+export const ConvexEntityMentionRowSchema = z.object({
+  _id: z.string().min(1),
+  _creationTime: z.number().optional(),
+  userId: z.string().min(1),
+  entityId: z.string().min(1),
+  thoughtId: z.string().min(1),
+  span: z.object({ start: z.number(), end: z.number() }).optional(),
+  createdAt: z.number().positive(),
+});
+export type ConvexEntityMentionRow = z.infer<typeof ConvexEntityMentionRowSchema>;
+
+export const ConvexEntityRelationRowSchema = z.object({
+  _id: z.string().min(1),
+  _creationTime: z.number().optional(),
+  userId: z.string().min(1),
+  fromEntityId: z.string().min(1),
+  toEntityId: z.string().min(1),
+  kind: z.string().min(1),
+  evidenceThoughtIds: z.array(z.string().min(1)),
+  confidence: z.number().min(0).max(1),
+  createdAt: z.number().positive(),
+  updatedAt: z.number().positive(),
+});
+export type ConvexEntityRelationRow = z.infer<typeof ConvexEntityRelationRowSchema>;
+
+export const EntityListResponseSchema = z.object({
+  rows: z.array(ConvexEntityRowSchema),
+});
+
+export const EntityGetResponseSchema = z.object({
+  entity: ConvexEntityRowSchema.nullable(),
+  mentions: z.array(ConvexEntityMentionRowSchema),
+});
+
+export const EntityRelationsResponseSchema = z.object({
+  outgoing: z.array(ConvexEntityRelationRowSchema),
+  incoming: z.array(ConvexEntityRelationRowSchema),
+});

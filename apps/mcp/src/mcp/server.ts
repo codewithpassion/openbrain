@@ -3,8 +3,18 @@ import type { AnySchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import {
   captureThoughtInputSchema,
   captureThoughtOutputSchema,
+  classifyThoughtInputSchema,
+  classifyThoughtOutputSchema,
+  enrichThoughtInputSchema,
+  enrichThoughtOutputSchema,
+  entityRelationsInputSchema,
+  entityRelationsOutputSchema,
   fetchInputSchema,
   fetchOutputSchema,
+  getEntityInputSchema,
+  getEntityOutputSchema,
+  listEntitiesInputSchema,
+  listEntitiesOutputSchema,
   listThoughtsInputSchema,
   listThoughtsOutputSchema,
   memoryRecallInputSchema,
@@ -13,6 +23,8 @@ import {
   memoryReviewOutputSchema,
   memoryWritebackInputSchema,
   memoryWritebackOutputSchema,
+  panBrainDumpInputSchema,
+  panBrainDumpOutputSchema,
   searchInputSchema,
   searchOutputSchema,
   searchThoughtsInputSchema,
@@ -22,11 +34,17 @@ import {
 } from "@openbrains/shared";
 import type { AuthContext } from "../auth/types";
 import { captureThoughtHandler } from "./tools/capture-thought";
+import { classifyThoughtHandler } from "./tools/classify-thought";
+import { enrichThoughtHandler } from "./tools/enrich-thought";
+import { entityRelationsHandler } from "./tools/entity-relations";
 import { fetchThoughtHandler } from "./tools/fetch-thought";
+import { getEntityHandler } from "./tools/get-entity";
+import { listEntitiesHandler } from "./tools/list-entities";
 import { listThoughtsHandler } from "./tools/list-thoughts";
 import { memoryRecallHandler } from "./tools/memory-recall";
 import { memoryReviewHandler } from "./tools/memory-review";
 import { memoryWritebackHandler } from "./tools/memory-writeback";
+import { panBrainDumpHandler } from "./tools/pan-brain-dump";
 import { searchHandler } from "./tools/search";
 import { searchThoughtsHandler } from "./tools/search-thoughts";
 import { thoughtStatsHandler } from "./tools/thought-stats";
@@ -107,6 +125,48 @@ const TOOLS: readonly ToolDef[] = [
     input: memoryReviewInputSchema,
     output: memoryReviewOutputSchema,
     handler: memoryReviewHandler,
+  },
+  {
+    name: "list_entities",
+    description: "List entities (people/orgs/topics/...) for the authenticated user.",
+    input: listEntitiesInputSchema,
+    output: listEntitiesOutputSchema,
+    handler: listEntitiesHandler,
+  },
+  {
+    name: "get_entity",
+    description: "Fetch one entity by id plus recent mentions.",
+    input: getEntityInputSchema,
+    output: getEntityOutputSchema,
+    handler: getEntityHandler,
+  },
+  {
+    name: "entity_relations",
+    description: "Outgoing and incoming typed relations for an entity.",
+    input: entityRelationsInputSchema,
+    output: entityRelationsOutputSchema,
+    handler: entityRelationsHandler,
+  },
+  {
+    name: "classify_thought",
+    description: "Use the LLM to classify a thought's `metadata.type`.",
+    input: classifyThoughtInputSchema,
+    output: classifyThoughtOutputSchema,
+    handler: classifyThoughtHandler,
+  },
+  {
+    name: "enrich_thought",
+    description: "Use the LLM to compute richer metadata for a thought.",
+    input: enrichThoughtInputSchema,
+    output: enrichThoughtOutputSchema,
+    handler: enrichThoughtHandler,
+  },
+  {
+    name: "pan_brain_dump",
+    description: "Split a freeform brain-dump into discrete idea candidates.",
+    input: panBrainDumpInputSchema,
+    output: panBrainDumpOutputSchema,
+    handler: panBrainDumpHandler,
   },
 ] as const;
 

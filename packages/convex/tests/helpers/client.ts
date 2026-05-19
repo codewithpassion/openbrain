@@ -18,6 +18,8 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./thoughts.ts": () => import("../../convex/thoughts"),
   "./apiKeys.ts": () => import("../../convex/apiKeys"),
   "./http.ts": () => import("../../convex/http"),
+  "./aiAction.ts": () => import("../../convex/aiAction"),
+  "./entities.ts": () => import("../../convex/entities"),
   "./memory/provenance.ts": () => import("../../convex/memory/provenance"),
   "./memory/review.ts": () => import("../../convex/memory/review"),
   "./memory/usePolicy.ts": () => import("../../convex/memory/usePolicy"),

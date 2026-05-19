@@ -20,6 +20,7 @@
     "clean": "rm -rf .convex .turbo convex/_generated"
   },
   "dependencies": {
+    "@openbrains/ingest": "workspace:*",
     "@openbrains/shared": "workspace:*",
     "convex": "^1.39.1"
   },
