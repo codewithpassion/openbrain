@@ -87,13 +87,13 @@ bunx wrangler kv namespace create OAUTH_KV
 # → copy the id into apps/mcp/wrangler.jsonc under kv_namespaces[0].id
 
 # Vectorize index — 1024-dim Qwen3 embeddings, cosine.
-bunx wrangler vectorize create thoughts-v1 \
+bunx wrangler vectorize create openbrain-thoughts-v1 \
   --dimensions=1024 --metric=cosine
 
 # Metadata indexes so MCP search can push down filters cheaply.
-bunx wrangler vectorize create-metadata-index thoughts-v1 \
+bunx wrangler vectorize create-metadata-index openbrain-thoughts-v1 \
   --property-name=type   --type=string
-bunx wrangler vectorize create-metadata-index thoughts-v1 \
+bunx wrangler vectorize create-metadata-index openbrain-thoughts-v1 \
   --property-name=source --type=string
 ```
 
@@ -212,7 +212,7 @@ token-overlap scorer — same Zod contracts, no Cloudflare bill.
 | `ob login` hangs at `authorization_pending` | You haven't approved in the browser yet. Open the URL printed by the CLI. |
 | Claude Desktop connector fails OAuth | Your redirect URI list in Clerk doesn't match the deployed Worker host. Edit it and try again. |
 | `bun run smoke` env error | Either set `OB_SERVER_URL` + `OB_ACCESS_TOKEN`, or run `ob login` first (the script reads `~/.config/ob/credentials.json` as a fallback). |
-| Search returns no results above threshold | The embedding pipeline silently failed — check Worker logs (`bunx wrangler tail`) for Workers AI 5xx, then confirm the Vectorize index is the `thoughts-v1` 1024-dim cosine index from step 3. |
+| Search returns no results above threshold | The embedding pipeline silently failed — check Worker logs (`bunx wrangler tail`) for Workers AI 5xx, then confirm the Vectorize index is the `openbrain-thoughts-v1` 1024-dim cosine index from step 3. |
 | Smoke fixtures pile up in your store | v1 has no `deleteThought` MCP tool. Fixtures are tagged `source=smoke` and easy to clean from the Convex dashboard. Tracked as a follow-up. |
 
 ## 10. Rollback
@@ -224,7 +224,7 @@ down:
 bunx wrangler delete ob-mcp                       # MCP Worker
 bunx wrangler delete ob-dashboard                 # Dashboard Worker
 bunx wrangler kv namespace delete --binding OAUTH_KV
-bunx wrangler vectorize delete thoughts-v1
+bunx wrangler vectorize delete openbrain-thoughts-v1
 # Convex: archive the deployment from the dashboard.
 # Clerk: delete the application from the dashboard.
 ```

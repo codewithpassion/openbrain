@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "ai": { "binding": "AI" },
-  "vectorize": [{ "binding": "VECTORIZE", "index_name": "thoughts-v1" }],
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "openbrain-thoughts-v1", "remote": true }],
   // Single KV binding shared by the OAuth provider and the device-flow code.
   // The device-flow keys are namespaced under `device:` and `device_user_code:`
   // prefixes (see `src/auth/device-store.ts`) so they never collide with the

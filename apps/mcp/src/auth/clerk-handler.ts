@@ -39,6 +39,17 @@ interface ClerkTokenResponse {
   id_token?: string;
 }
 
+// Build the public-facing callback URL. Behind a TLS-terminating proxy
+// (cloudflared tunnels, Cloudflare's edge) the request reaches the Worker
+// over plain HTTP, so `new URL(req.url).protocol` is "http:". The real public
+// scheme is in X-Forwarded-Proto; honour it so the redirect_uri we send to
+// Clerk matches the URL Clerk will redirect the user back to.
+function publicCallbackUri(reqUrl: string, forwardedProto: string | undefined): string {
+  const url = new URL(reqUrl);
+  const proto = forwardedProto ?? url.protocol.replace(":", "");
+  return `${proto}://${url.host}/callback`;
+}
+
 interface StoredState {
   authReq?: Parameters<OAuthHelpers["completeAuthorization"]>[0]["request"];
   intent?: "device_approve";
@@ -102,8 +113,7 @@ export function createClerkHandler(args: CreateClerkHandlerArgs): DefaultHandler
     await ctx.env.OAUTH_KV.put(`${STATE_KV_PREFIX}${state}`, JSON.stringify(stored), {
       expirationTtl: STATE_TTL_SECONDS,
     });
-    const url = new URL(ctx.req.url);
-    const redirectUri = `${url.origin}/callback`;
+    const redirectUri = publicCallbackUri(ctx.req.url, ctx.req.header("x-forwarded-proto"));
     const clerkUrl = new URL(`https://${ctx.env.CLERK_DOMAIN}/oauth/authorize`);
     clerkUrl.searchParams.set("response_type", "code");
     clerkUrl.searchParams.set("client_id", ctx.env.CLERK_CLIENT_ID);
@@ -124,8 +134,7 @@ export function createClerkHandler(args: CreateClerkHandlerArgs): DefaultHandler
     await ctx.env.OAUTH_KV.put(`${STATE_KV_PREFIX}${state}`, JSON.stringify(stored), {
       expirationTtl: STATE_TTL_SECONDS,
     });
-    const url = new URL(ctx.req.url);
-    const redirectUri = `${url.origin}/callback`;
+    const redirectUri = publicCallbackUri(ctx.req.url, ctx.req.header("x-forwarded-proto"));
     const clerkUrl = new URL(`https://${ctx.env.CLERK_DOMAIN}/oauth/authorize`);
     clerkUrl.searchParams.set("response_type", "code");
     clerkUrl.searchParams.set("client_id", ctx.env.CLERK_CLIENT_ID);
@@ -148,7 +157,8 @@ export function createClerkHandler(args: CreateClerkHandlerArgs): DefaultHandler
     if (stored === null) {
       return ctx.text("unknown or expired state", 400);
     }
-    const identity = await exchangeClerkCode(ctx.req.url, ctx.env, code);
+    const redirectUri = publicCallbackUri(ctx.req.url, ctx.req.header("x-forwarded-proto"));
+    const identity = await exchangeClerkCode(redirectUri, ctx.env, code);
     if (identity === null) {
       return ctx.text("clerk token exchange failed", 502);
     }
@@ -209,12 +219,10 @@ function buildAuthCompletion(
  * resolved Clerk identity or `null` if the exchange/verify failed.
  */
 async function exchangeClerkCode(
-  requestUrl: string,
+  redirectUri: string,
   env: WorkerEnv,
   code: string,
 ): Promise<{ userId: string; email?: string } | null> {
-  const url = new URL(requestUrl);
-  const redirectUri = `${url.origin}/callback`;
   const tokenRes = await fetch(`https://${env.CLERK_DOMAIN}/oauth/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },

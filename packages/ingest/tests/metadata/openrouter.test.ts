@@ -131,6 +131,51 @@ describe("createOpenRouterMetadataExtractor", () => {
     expect(out).toEqual(FALLBACK);
   });
 
+  test("delegates to the configured fallback extractor when the upstream call fails", async () => {
+    const { fetchFn } = makeFetch({ error: "nope" }, { status: 500 });
+    let fallbackInvocations = 0;
+    const fallback = {
+      extract: (content: string): Promise<ThoughtMetadataType> => {
+        fallbackInvocations += 1;
+        return Promise.resolve({
+          type: "idea" as const,
+          topics: ["from-fallback"],
+          people: [content.slice(0, 3)],
+          action_items: [],
+          dates_mentioned: [],
+        });
+      },
+    };
+    const extractor = createOpenRouterMetadataExtractor({
+      apiKey: "key",
+      fetch: fetchFn,
+      fallback,
+    });
+    const out = await extractor.extract("hello world");
+    expect(fallbackInvocations).toBe(1);
+    expect(out.type).toBe("idea");
+    expect(out.topics).toEqual(["from-fallback"]);
+    expect(out.people).toEqual(["hel"]);
+  });
+
+  test("delegates to the fallback when the response is malformed JSON", async () => {
+    const { fetchFn } = makeFetch(chatCompletion("not valid json {{{"));
+    let invoked = 0;
+    const fallback = {
+      extract: (): Promise<ThoughtMetadataType> => {
+        invoked += 1;
+        return Promise.resolve(FALLBACK);
+      },
+    };
+    const extractor = createOpenRouterMetadataExtractor({
+      apiKey: "key",
+      fetch: fetchFn,
+      fallback,
+    });
+    await extractor.extract("x");
+    expect(invoked).toBe(1);
+  });
+
   test("respects a custom baseUrl", async () => {
     const { fetchFn, calls } = makeFetch(chatCompletion(JSON.stringify(FALLBACK)));
     const extractor = createOpenRouterMetadataExtractor({

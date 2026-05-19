@@ -18,7 +18,8 @@
     "typecheck": "turbo run typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
     "smoke": "bun --filter @openbrains/scripts smoke",
-    "clean": "turbo run clean && rm -rf node_modules .turbo"
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "tunnel": "cloudflared tunnel --config /dev/null --url http://localhost:8787"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",

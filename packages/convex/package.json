@@ -4,8 +4,13 @@
   "type": "module",
   "version": "0.0.0",
   "exports": {
-    "./api": "./convex/_generated/api.ts",
-    "./dataModel": "./convex/_generated/dataModel.ts"
+    "./api": {
+      "types": "./convex/_generated/api.d.ts",
+      "default": "./convex/_generated/api.js"
+    },
+    "./dataModel": {
+      "types": "./convex/_generated/dataModel.d.ts"
+    }
   },
   "scripts": {
     "dev": "convex dev",

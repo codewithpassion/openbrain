@@ -52,11 +52,20 @@ export function createOpenRouterMetadataExtractor(opts: {
   model?: string;
   baseUrl?: string;
   fetch?: FetchLike;
+  fallback?: MetadataExtractor;
 }): MetadataExtractor {
   const apiKey = opts.apiKey;
   const model = opts.model ?? DEFAULT_MODEL;
   const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   const doFetch = opts.fetch ?? fetch;
+  const fallback = opts.fallback;
+
+  function onFailure(content: string): Promise<ThoughtMetadata> {
+    if (fallback) {
+      return fallback.extract(content);
+    }
+    return Promise.resolve(ThoughtMetadata.parse(FALLBACK_METADATA));
+  }
 
   async function extract(content: string): Promise<ThoughtMetadata> {
     try {
@@ -76,27 +85,27 @@ export function createOpenRouterMetadataExtractor(opts: {
         }),
       });
       if (!response.ok) {
-        return ThoughtMetadata.parse(FALLBACK_METADATA);
+        return onFailure(content);
       }
       const body = (await response.json()) as OpenRouterResponse;
       const text = body.choices?.[0]?.message?.content;
       if (typeof text !== "string") {
-        return ThoughtMetadata.parse(FALLBACK_METADATA);
+        return onFailure(content);
       }
       const parsed = safeJsonParse(text);
       if (parsed === undefined) {
-        return ThoughtMetadata.parse(FALLBACK_METADATA);
+        return onFailure(content);
       }
       const result = ThoughtMetadata.safeParse(parsed);
       if (!result.success) {
-        return ThoughtMetadata.parse(FALLBACK_METADATA);
+        return onFailure(content);
       }
       return result.data;
     } catch {
-      // Any network/parse explosion falls back to the safe default. We
-      // intentionally swallow here because the ingestion pipeline always
-      // needs *some* metadata to proceed.
-      return ThoughtMetadata.parse(FALLBACK_METADATA);
+      // Any network/parse explosion delegates to the configured fallback,
+      // or the static safe default. The ingestion pipeline always needs
+      // *some* metadata to proceed.
+      return onFailure(content);
     }
   }
 
