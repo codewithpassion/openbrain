@@ -15,7 +15,8 @@ A reimplementation of [Nate B. Jones's Open Brain (OB1)](https://github.com/Nate
 | Dashboard | **TanStack Start** (CF Workers template) + **shadcn/ui** | Official CF template; auto-detected by `wrangler deploy`. |
 | Backend data layer | **Convex** | Reactive queries, mutations, scheduled jobs. Clerk integration built in. |
 | Capture surfaces (v1) | Dashboard quick-capture + `ob` **CLI** | CLI doubles as a reference MCP client. |
-| LLM gateway (metadata extraction) | **OpenRouter** initially (OB1 default), with a thin adapter so we can swap to Workers AI or Anthropic direct later | Adapter pattern; not a one-way door. |
+| LLM gateway (metadata extraction, classify/enrich/pan tools) | **Workers AI** (`@cf/meta/llama-3.1-8b-instruct`) is the MCP Worker default; `OPENROUTER_API_KEY` is an optional override that falls back to Workers AI on failure. Convex actions (digests, entity extraction) still default to OpenRouter — they don't share the binding. | Adapter interface (`MetadataExtractor`, `BrainDumpSplitter`) makes swapping costless. |
+| Convex → Workers AI bridge | `POST /internal/ai/run` on the MCP Worker, protected by `INTERNAL_API_SECRET`. Convex actions use `createWorkersAiHttpClient` to call it. | Convex doesn't have an `AI` binding; this is the only path. Gated on `MCP_WORKER_URL`. |
 
 ## System diagram
 
@@ -31,14 +32,20 @@ A reimplementation of [Nate B. Jones's Open Brain (OB1)](https://github.com/Nate
 │      /authorize, /token, /register                             │
 │  - Delegates auth UI to Clerk                                  │
 │  - createMcpHandler (apiRoute: /mcp)                           │
-│  - Tools: search_thoughts, list_thoughts, capture_thought,     │
+│  - v1 tools: search_thoughts, list_thoughts, capture_thought,  │
 │           thought_stats, search, fetch (ChatGPT compat),       │
-│           memory_recall, memory_writeback                      │
+│           memory_recall, memory_writeback, memory_review       │
+│  - Phase C/E tools: list_entities, get_entity,                 │
+│           entity_relations, classify_thought, enrich_thought,  │
+│           pan_brain_dump                                       │
+│  - /internal/ai/run — Convex → Workers AI bridge               │
+│      (shared INTERNAL_API_SECRET)                              │
 │  - Bindings: AI (Workers AI), VECTORIZE, CONVEX_URL,           │
 │              CLERK_JWKS_URL, OAUTH_KV (token storage)          │
 └─────────┬──────────────────────────────────────────┬───────────┘
           │ Convex HTTP client (with userId from JWT)│ Vectorize binding
-          ▼                                          ▼
+          │   ▲ /internal/ai/run for embeddings      │
+          ▼   │                                      ▼
 ┌──────────────────────────────┐         ┌────────────────────────┐
 │  Convex (data layer)         │         │  CF Vectorize          │
 │  - thoughts                  │         │  Index: thoughts-v1    │
@@ -49,7 +56,11 @@ A reimplementation of [Nate B. Jones's Open Brain (OB1)](https://github.com/Nate
 │  - memory_source_refs        │         │  payload: {thoughtId,  │
 │  - memory_recall_traces      │         │   userId}              │
 │  - memory_audit              │         └────────────────────────┘
+│  - entities, entity_mentions,│
+│    entity_relations (Phase C)│
 │  - api_keys (for CLI tokens) │
+│  - aiAction.embedInternal    │
+│    (calls Worker /internal)  │
 │  Clerk JWT verification      │
 └──────────────────────────────┘
           ▲                  ▲
@@ -176,9 +187,11 @@ npx wrangler vectorize create-metadata-index thoughts-v1 --property-name=source 
 - **Vector id = `thoughtId`** (the Convex document id). One-to-one.
 - **Payload metadata** kept tiny: `{ type, source }`. Anything else lives in Convex; we filter coarsely in Vectorize then look up.
 
-## MCP tools (v1)
+## MCP tools
 
-Mirroring OB1's surface so existing OB1 clients/skills work with minimal changes:
+Mirroring OB1's surface so existing OB1 clients/skills work with minimal changes. v1 is the OB1-equivalent set; Phase C/E additions land entity navigation + LLM workflow primitives.
+
+### v1 (capture / search / governed memory)
 
 | Tool | Read-only | Notes |
 | --- | --- | --- |
@@ -193,6 +206,24 @@ Mirroring OB1's surface so existing OB1 clients/skills work with minimal changes
 | **`memory_review`** | ❌ | Lets a human (or another agent acting on user's behalf) promote evidence → instruction |
 
 The last three are the Agent Memory sidecar surface. They're what makes this version meaningfully better than OB1 for coding-agent use cases (where you want governed recall and write-back, not raw RAG).
+
+### Phase C — entity navigation
+
+| Tool | Read-only | Notes |
+| --- | --- | --- |
+| `list_entities` | ✅ | Lists entities for the authenticated user; optional `kind` filter (person / org / topic / …) |
+| `get_entity` | ✅ | One entity by id plus recent mentions |
+| `entity_relations` | ✅ | Outgoing and incoming typed relations for an entity |
+
+### Phase E — LLM workflow primitives (read-only, no persistence)
+
+All three accept an injected `MetadataExtractor` / `BrainDumpSplitter` (Workers AI by default, OpenRouter override). The tools surface LLM output — they don't mutate the thought; callers can pipe results into `capture_thought` or a future `update_thought`.
+
+| Tool | Read-only | Notes |
+| --- | --- | --- |
+| `classify_thought` | ✅ | Returns the LLM-inferred `metadata.type` for a thought |
+| `enrich_thought` | ✅ | Returns full LLM-inferred `ThoughtMetadata` (type, topics, people, action items, dates) |
+| `pan_brain_dump` | ✅ | Splits a freeform dump into up to `maxIdeas` discrete idea candidates |
 
 ## Auth flow
 
@@ -276,22 +307,125 @@ openbrains/
 8. **CLI:** `ob login`, `ob capture`, `ob search`, `ob recall`. Distributed via npm.
 9. **Connect Claude Desktop end-to-end:** add custom connector pointing at MCP URL, OAuth dance, capture+recall a real thought.
 
-## Open questions to revisit after Phase 1
+## Non-goals (Phase 1 v1 only)
 
-- **Capture integrations beyond CLI/dashboard.** Slack, Discord, Telegram, email. Each is a webhook → Convex HTTP action.
-- **Importers (OB1 recipes).** ChatGPT export, Obsidian vault, Gmail, X/Twitter. These will run as long-lived Convex actions or scheduled jobs.
-- **Embedding migration path.** If we change models, we need a re-embed job. Track `embeddingModel` + `embeddingDims` per-row so we can run mixed-model queries during a migration.
-- **Multi-modal.** OB1 is text-only. Vectorize+Workers AI support image embeddings (e.g. `@cf/baai/bge-m3` or CLIP variants) — defer unless needed.
-- **Shared brains / RLS-like sharing.** OB1's Extension 3+ uses Postgres RLS to share parts of a brain. With Convex this is per-row userId checks + a `shared_with` table. Defer until a real use case.
-- **OB1 import.** Their `thoughts` table uses 1536-d OpenAI embeddings. To import OB1 data we'd need a re-embed (1536→1024) pass. Doable; not v1.
+These were deferred from v1 to keep the first vertical slice small. Most are now scheduled in **Post-v1 roadmap** below; the ones still off-limits are flagged "(deferred indefinitely)".
 
-## Non-goals (v1)
+- Slack/Discord/Telegram capture — scheduled (after Gmail). Email/Slack **delivery** of digests is also deferred.
+- Importers — scheduled (Phase D ships Gmail backup/restore as the reference).
+- Vector reranking — (deferred indefinitely)
+- Team/org features / shared brains — (deferred indefinitely; per-user only)
+- Mobile app — (deferred indefinitely; mobile via Claude Desktop / ChatGPT app)
+- Multi-modal — (deferred indefinitely)
 
-- No Slack/Discord/Telegram capture. CLI + dashboard only.
-- No importers. Empty brain on first run.
-- No vector reranking. Plain k-NN with metadata filters.
-- No team/org features. Multi-tenant means many isolated single-user brains, not shared workspaces.
-- No mobile app. Mobile happens through Claude Desktop / ChatGPT app / Telegram later.
+## Carried-over open questions
+
+- **Embedding migration path.** If we change models, we need a re-embed job. Track `embeddingModel` + `embeddingDims` per-row so we can run mixed-model queries during a migration. (Phase B introduces the re-embed pipeline; full migration job comes later.)
+- **OB1 data import.** Their `thoughts` table uses 1536-d OpenAI embeddings. To import OB1 data we'd need a re-embed (1536→1024) pass. (Folded into Phase D.)
+
+## Post-v1 roadmap
+
+Driven by gap-analysis vs OB1. Each phase is gated on `bun run check` green and updates this section as work completes. Phases are ordered by **architectural risk and dependency**, not user enthusiasm — earlier phases unblock later ones.
+
+### Phase A — Surface what already exists (dashboard wiring + skill-pack convention)
+
+**No new tables. No new infra.** Wires up dashboard pages that read sidecar tables already populated by the MCP/CLI surface.
+
+Adds:
+
+- `apps/dashboard/src/routes/thoughts.$id.tsx` — thought detail: content, source refs, provenance, use policy, review history, delete (edit deferred to Phase B's re-embed pipeline).
+- `apps/dashboard/src/routes/inspector.tsx` — Memory Inspector: list `memory_review` entries, promote evidence → instruction via `memory.review.promote`.
+- `apps/dashboard/src/routes/audit.tsx` — Audit log viewer over `memory_audit`.
+- `packages/skills/` — manifest convention (`skill.json` + `prompt.md`) for OB1-style skill packs. Phase A ships **3** packs (`research-synthesis`, `meeting-synthesis`, `panning-for-gold`); remaining 13 are populated opportunistically.
+- New Convex query: `memory.review.listForUser({status?, limit})`.
+
+**Deferred to later phases**: duplicate review (needs vector-similarity scan, not pure fingerprint lookup — Phase E).
+
+### Phase B — Scheduled-job primitive + daily digest (stored locally)
+
+Introduces Convex scheduled actions. Daily digest is the smallest reference implementation; `life-engine`, `thought-enrichment`, `entity-extraction` all reuse this primitive.
+
+Adds:
+
+- Convex `digests` table: `{ userId, date, summary, thoughtIds[], generatedAt }`.
+- `digests.generateForUser` internal action — summarizes last 24h via the existing OpenRouter metadata-extraction adapter.
+- Convex cron: once-daily per user.
+- `apps/dashboard/src/routes/digests.tsx` — list digests, "regenerate now" button.
+- `apps/dashboard/src/routes/jobs.tsx` — Scheduled-jobs status page.
+- Re-embed pipeline for `thoughts.updateContent` (re-fingerprint, re-embed, re-extract metadata). Unblocks Phase A's deferred edit.
+- **Email/Slack delivery: not in this phase.** Digests are local-only.
+
+### Phase C — Entity model (entities + extraction + wiki + graph + typed edges)
+
+Biggest architectural commitment. Adds entity-centric data alongside thought-centric data.
+
+**Decision (resolved 2026-05-19)**: extraction runs as a **Convex internal action** (`entitiesAction.extractFromThoughtInternal`), not a separate CF Worker. Rationale: Phase B established the scheduled-action pattern; entity extraction is bursty (only on capture or backfill), so a long-running Worker is overkill; tenant-scoping is automatic via Convex `userId` filters. If we ever need independent scaling, the action can be moved to a Worker behind the same internal-mutation API.
+
+Adds:
+
+- Convex tables:
+  - `entities` — `{ userId, kind: "person"|"org"|"topic"|..., canonicalName, aliases[], metadata }`
+  - `entity_mentions` — `{ entityId, thoughtId, span?: {start, end} }`
+  - `entity_relations` — `{ fromEntityId, toEntityId, kind, evidenceThoughtIds[], confidence }`
+- Entity extraction action: NER + canonicalization, runs on capture + on backfill.
+- Typed-edge classifier: LLM picks `relation.kind` given two entities + evidence thoughts.
+- Dashboard routes: `/entities`, `/entities/$id` (synthesized wiki page), `/graph` (ob-graph viz — force-directed canvas via `react-force-graph-2d`, driven by `buildGraphModel`).
+- MCP tools: `list_entities`, `get_entity`, `entity_relations` — **landed**, see "MCP tools › Phase C".
+- Convex query `entities.relationsForUser({limit?})` backs the all-relations fetch for the graph canvas.
+
+### Phase D — Importer/exporter pattern (Gmail backup + restore as reference)
+
+Establishes the long-running-action shape and the ingestion dashboard surface. Gmail backup AND restore are the reference implementation — every later importer (Obsidian, ChatGPT, etc.) reuses the same `Importer` interface.
+
+Adds:
+
+- `packages/ingest/src/sources/` — `Importer` interface (`begin`, `nextBatch`, `finalize`).
+- Convex `imports` table: `{ userId, source, status, cursor, stats, createdAt }`.
+- Gmail importer: incremental cursor by `historyId`; OAuth via Clerk Google connection or a separate stored token (decision at start of phase).
+- Gmail exporter: dumps thoughts to a Gmail label *or* an mbox archive in R2 (decision at start of phase).
+- Brain backup/restore: bundle thoughts + sidecars to JSON in R2; restore reverses the bundle.
+- `apps/dashboard/src/routes/ingest.tsx` — list sources, start/pause, last-run stats.
+
+### Phase E — LLM workflow primitives (adaptive capture, thought enrichment, panning for gold, quality auditing)
+
+Workflows that operate **on** existing thoughts. All reuse Phase B's scheduled-action primitive and Phase C's entity model.
+
+Adds:
+
+- `adaptive-capture-classification`: on capture, LLM fills `metadata.type` if not supplied.
+- `thought-enrichment`: scheduled action refines metadata/entities for under-tagged thoughts.
+- `panning-for-gold`: takes a brain-dump thought, splits into N evaluated idea thoughts.
+- **Duplicate review** (deferred from Phase A): vector-similarity scan to surface near-duplicates; dashboard page at `/inspector?tab=duplicates`.
+- Quality auditing: flags thoughts with missing fields, low embedding norm, no entities — surfaces in `/inspector`.
+- MCP tools: `classify_thought`, `enrich_thought`, `pan_brain_dump` — **landed as read-only LLM proxies** (see "MCP tools › Phase E"). Persistence (`adaptive-capture-classification`, `thought-enrichment`) is still scheduled — the tools surface results; the scheduled-action wiring is the remaining work.
+- Skill packs: fill out the remaining 13 of OB1's 16 (`claudeception`, `autodream-brain-sync`, `weekly-signal-diff`, `world-model-diagnostic`, `heavy-file-ingestion`, `competitive-analysis`, `deal-memo-drafting`, `financial-model-review`, `work-operating-model`, `openclaw-agent-memory`, `auto-capture`, `n-agentic-harnesses`, plus one TBD).
+
+### Phase F — Professional CRM (depends on Phase C entity model)
+
+Domain extension. CRM = entities of `kind: "person"` + `kind: "org"` with extra structured fields, plus interactions tagged as meetings/calls/emails.
+
+Adds:
+
+- Entity schema extensions: `person` gains `{title, company: entityRef, email, phone, last_contact_at}`; `org` gains `{industry, hq, headcount_estimate}`.
+- New table `interactions` — `{ personId, thoughtId, kind, at }`.
+- Routes `/crm`, `/crm/$personId`, `/crm/$orgId`.
+- Skill pack: `relationship-development`.
+
+### Phase G — Life engine
+
+OB1's flagship "self-improving personal assistant." **Scope not defined yet** — re-scope at the start of the phase. Likely shape: scheduled briefings consuming recent thoughts + entities + a "world model" instruction-grade thought, producing structured briefing thoughts back.
+
+Depends on Phases B, C, E.
+
+---
+
+### Roadmap rules (apply across all phases)
+
+1. **TDD discipline does not relax.** Every new Convex function, dashboard component, ingest module — failing test in the same diff.
+2. **`bun run check` green per phase boundary**, not per merge. Phases are large; intra-phase tasks may break the gate; the phase itself does not.
+3. **Skill packs are content, not features.** Don't treat "16 skill packs" as 16 engineering tasks. It's one convention (Phase A) plus N markdown files (filled opportunistically through Phase E).
+4. **Decisions surface upward.** Each phase has a small number of open decisions (extraction worker placement, Gmail OAuth strategy, export format). Flag them at phase start, don't decide silently.
+5. **OB1 mapping.** Every phase references the OB1 recipe/integration/extension it mirrors; the running cross-reference lives in `docs/ob1-mapping.md` (introduced during Phase A).
 
 ## Reference: stack versions (as of 2026-05-18)
 

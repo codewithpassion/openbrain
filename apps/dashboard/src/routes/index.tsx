@@ -49,7 +49,14 @@ function Authenticated() {
         ) : (
           <div className="space-y-3">
             {thoughts.map((t) => (
-              <ThoughtCard key={t._id} thought={t} />
+              <Link
+                key={t._id}
+                to="/thoughts/$id"
+                params={{ id: t._id }}
+                className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ThoughtCard thought={t} />
+              </Link>
             ))}
           </div>
         )}

@@ -1,0 +1,7 @@
+{
+  "name": "deal-memo-drafting",
+  "title": "Deal Memo Drafting",
+  "description": "Turn existing diligence materials into a structured deal, IC, or partnership memo with explicit risks and asks.",
+  "version": "0.1.0",
+  "tags": ["deals", "memo", "diligence"]
+}

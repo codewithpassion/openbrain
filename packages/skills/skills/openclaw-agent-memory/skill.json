@@ -1,0 +1,7 @@
+{
+  "name": "openclaw-agent-memory",
+  "title": "OpenClaw Agent Memory",
+  "description": "Teach an OpenClaw-style coding agent to recall, write back, report usage, and respect provenance/use-policy rules when interacting with OpenBrains.",
+  "version": "0.1.0",
+  "tags": ["agents", "openclaw", "integration"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "competitive-analysis",
+  "title": "Competitive Analysis",
+  "description": "Build competitor briefs, pricing comparisons, market maps, and strategic recommendations from supplied source material.",
+  "version": "0.1.0",
+  "tags": ["strategy", "competitive", "market-mapping"]
+}

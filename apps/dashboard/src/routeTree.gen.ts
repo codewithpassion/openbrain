@@ -10,14 +10,76 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as JobsRouteImport } from './routes/jobs'
+import { Route as QualityRouteImport } from './routes/quality'
+import { Route as IngestRouteImport } from './routes/ingest'
+import { Route as InspectorRouteImport } from './routes/inspector'
+import { Route as GraphRouteImport } from './routes/graph'
+import { Route as EntitiesRouteImport } from './routes/entities'
+import { Route as DigestsRouteImport } from './routes/digests'
+import { Route as BriefingsRouteImport } from './routes/briefings'
+import { Route as AuditRouteImport } from './routes/audit'
+import { Route as CrmRouteImport } from './routes/crm'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ThoughtsIdRouteImport } from './routes/thoughts.$id'
+import { Route as EntitiesIdRouteImport } from './routes/entities.$id'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JobsRoute = JobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QualityRoute = QualityRouteImport.update({
+  id: '/quality',
+  path: '/quality',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IngestRoute = IngestRouteImport.update({
+  id: '/ingest',
+  path: '/ingest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InspectorRoute = InspectorRouteImport.update({
+  id: '/inspector',
+  path: '/inspector',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GraphRoute = GraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EntitiesRoute = EntitiesRouteImport.update({
+  id: '/entities',
+  path: '/entities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DigestsRoute = DigestsRouteImport.update({
+  id: '/digests',
+  path: '/digests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BriefingsRoute = BriefingsRouteImport.update({
+  id: '/briefings',
+  path: '/briefings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CrmRoute = CrmRouteImport.update({
+  id: '/crm',
+  path: '/crm',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiKeysRoute = ApiKeysRouteImport.update({
@@ -28,6 +90,16 @@ const ApiKeysRoute = ApiKeysRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ThoughtsIdRoute = ThoughtsIdRouteImport.update({
+  id: '/thoughts/$id',
+  path: '/thoughts/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EntitiesIdRoute = EntitiesIdRouteImport.update({
+  id: '/entities/$id',
+  path: '/entities/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignUpSplatRoute = SignUpSplatRouteImport.update({
@@ -44,39 +116,139 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/audit': typeof AuditRoute
+  '/briefings': typeof BriefingsRoute
+  '/crm': typeof CrmRoute
+  '/digests': typeof DigestsRoute
+  '/entities': typeof EntitiesRoute
+  '/entities/$id': typeof EntitiesIdRoute
+  '/graph': typeof GraphRoute
+  '/ingest': typeof IngestRoute
+  '/inspector': typeof InspectorRoute
+  '/jobs': typeof JobsRoute
+  '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
+  '/thoughts/$id': typeof ThoughtsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/audit': typeof AuditRoute
+  '/briefings': typeof BriefingsRoute
+  '/crm': typeof CrmRoute
+  '/digests': typeof DigestsRoute
+  '/entities': typeof EntitiesRoute
+  '/entities/$id': typeof EntitiesIdRoute
+  '/graph': typeof GraphRoute
+  '/ingest': typeof IngestRoute
+  '/inspector': typeof InspectorRoute
+  '/jobs': typeof JobsRoute
+  '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
+  '/thoughts/$id': typeof ThoughtsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/audit': typeof AuditRoute
+  '/briefings': typeof BriefingsRoute
+  '/crm': typeof CrmRoute
+  '/digests': typeof DigestsRoute
+  '/entities': typeof EntitiesRoute
+  '/entities/$id': typeof EntitiesIdRoute
+  '/graph': typeof GraphRoute
+  '/ingest': typeof IngestRoute
+  '/inspector': typeof InspectorRoute
+  '/jobs': typeof JobsRoute
+  '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
+  '/thoughts/$id': typeof ThoughtsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api-keys' | '/search' | '/sign-in/$' | '/sign-up/$'
+  fullPaths:
+    | '/'
+    | '/api-keys'
+    | '/audit'
+    | '/briefings'
+    | '/crm'
+    | '/digests'
+    | '/entities'
+    | '/entities/$id'
+    | '/graph'
+    | '/ingest'
+    | '/inspector'
+    | '/jobs'
+    | '/quality'
+    | '/search'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/thoughts/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api-keys' | '/search' | '/sign-in/$' | '/sign-up/$'
-  id: '__root__' | '/' | '/api-keys' | '/search' | '/sign-in/$' | '/sign-up/$'
+  to:
+    | '/'
+    | '/api-keys'
+    | '/audit'
+    | '/briefings'
+    | '/crm'
+    | '/digests'
+    | '/entities'
+    | '/entities/$id'
+    | '/graph'
+    | '/ingest'
+    | '/inspector'
+    | '/jobs'
+    | '/quality'
+    | '/search'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/thoughts/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/api-keys'
+    | '/audit'
+    | '/briefings'
+    | '/crm'
+    | '/digests'
+    | '/entities'
+    | '/entities/$id'
+    | '/graph'
+    | '/ingest'
+    | '/inspector'
+    | '/jobs'
+    | '/quality'
+    | '/search'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/thoughts/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiKeysRoute: typeof ApiKeysRoute
+  AuditRoute: typeof AuditRoute
+  BriefingsRoute: typeof BriefingsRoute
+  CrmRoute: typeof CrmRoute
+  DigestsRoute: typeof DigestsRoute
+  EntitiesRoute: typeof EntitiesRoute
+  EntitiesIdRoute: typeof EntitiesIdRoute
+  GraphRoute: typeof GraphRoute
+  IngestRoute: typeof IngestRoute
+  InspectorRoute: typeof InspectorRoute
+  JobsRoute: typeof JobsRoute
+  QualityRoute: typeof QualityRoute
   SearchRoute: typeof SearchRoute
   SignInSplatRoute: typeof SignInSplatRoute
   SignUpSplatRoute: typeof SignUpSplatRoute
+  ThoughtsIdRoute: typeof ThoughtsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -86,6 +258,76 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jobs': {
+      id: '/jobs'
+      path: '/jobs'
+      fullPath: '/jobs'
+      preLoaderRoute: typeof JobsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quality': {
+      id: '/quality'
+      path: '/quality'
+      fullPath: '/quality'
+      preLoaderRoute: typeof QualityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ingest': {
+      id: '/ingest'
+      path: '/ingest'
+      fullPath: '/ingest'
+      preLoaderRoute: typeof IngestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inspector': {
+      id: '/inspector'
+      path: '/inspector'
+      fullPath: '/inspector'
+      preLoaderRoute: typeof InspectorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/graph': {
+      id: '/graph'
+      path: '/graph'
+      fullPath: '/graph'
+      preLoaderRoute: typeof GraphRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/entities': {
+      id: '/entities'
+      path: '/entities'
+      fullPath: '/entities'
+      preLoaderRoute: typeof EntitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/digests': {
+      id: '/digests'
+      path: '/digests'
+      fullPath: '/digests'
+      preLoaderRoute: typeof DigestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/briefings': {
+      id: '/briefings'
+      path: '/briefings'
+      fullPath: '/briefings'
+      preLoaderRoute: typeof BriefingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/crm': {
+      id: '/crm'
+      path: '/crm'
+      fullPath: '/crm'
+      preLoaderRoute: typeof CrmRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api-keys': {
@@ -100,6 +342,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/thoughts/$id': {
+      id: '/thoughts/$id'
+      path: '/thoughts/$id'
+      fullPath: '/thoughts/$id'
+      preLoaderRoute: typeof ThoughtsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/entities/$id': {
+      id: '/entities/$id'
+      path: '/entities/$id'
+      fullPath: '/entities/$id'
+      preLoaderRoute: typeof EntitiesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-up/$': {
@@ -122,9 +378,21 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
+  AuditRoute: AuditRoute,
+  BriefingsRoute: BriefingsRoute,
+  CrmRoute: CrmRoute,
+  DigestsRoute: DigestsRoute,
+  EntitiesRoute: EntitiesRoute,
+  EntitiesIdRoute: EntitiesIdRoute,
+  GraphRoute: GraphRoute,
+  IngestRoute: IngestRoute,
+  InspectorRoute: InspectorRoute,
+  JobsRoute: JobsRoute,
+  QualityRoute: QualityRoute,
   SearchRoute: SearchRoute,
   SignInSplatRoute: SignInSplatRoute,
   SignUpSplatRoute: SignUpSplatRoute,
+  ThoughtsIdRoute: ThoughtsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

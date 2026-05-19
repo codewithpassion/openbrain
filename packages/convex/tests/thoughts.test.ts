@@ -291,4 +291,87 @@ describe("thoughts", () => {
     expect(auditRows[0]?.action).toBe("thought.create");
     expect(auditRows[0]?.thoughtId).toBe(id);
   });
+
+  test("updateContent patches content + fingerprint + metadata and audits the edit", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const fx = makeThought(TEST_USER_A);
+    const id = await ctxA.mutation(api.thoughts.createThought, {
+      content: fx.content,
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fx.fingerprint,
+      metadata: fx.metadata,
+    });
+    const newFp = "new-fp".padEnd(64, "0");
+    await ctxA.mutation(api.thoughts.updateContent, {
+      id,
+      content: "rewritten content",
+      fingerprint: newFp,
+      metadata: { ...fx.metadata, topics: ["renamed"] },
+    });
+    const got = await ctxA.query(api.thoughts.getThought, { id });
+    expect(got?.content).toBe("rewritten content");
+    expect(got?.fingerprint).toBe(newFp);
+    expect(got?.metadata.topics).toEqual(["renamed"]);
+    const audits = await t.run(async (ctx) =>
+      ctx.db
+        .query("memory_audit")
+        .withIndex("by_user_at", (q) => q.eq("userId", TEST_USER_A))
+        .collect(),
+    );
+    expect(audits.some((a) => a.action === "thought.updateContent")).toBe(true);
+  });
+
+  test("updateContent rejects when the fingerprint already exists on another thought", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const fxA = makeThought(TEST_USER_A);
+    const a = await ctxA.mutation(api.thoughts.createThought, {
+      content: "a",
+      source: fxA.source,
+      embeddingModel: fxA.embeddingModel,
+      embeddingDims: fxA.embeddingDims,
+      fingerprint: "fp-a".padEnd(64, "0"),
+      metadata: fxA.metadata,
+    });
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "b",
+      source: fxA.source,
+      embeddingModel: fxA.embeddingModel,
+      embeddingDims: fxA.embeddingDims,
+      fingerprint: "fp-b".padEnd(64, "0"),
+      metadata: fxA.metadata,
+    });
+    await expect(
+      ctxA.mutation(api.thoughts.updateContent, {
+        id: a,
+        content: "now duplicates b",
+        fingerprint: "fp-b".padEnd(64, "0"),
+        metadata: fxA.metadata,
+      }),
+    ).rejects.toThrow(/FINGERPRINT_COLLISION/);
+  });
+
+  test("updateContent refuses cross-tenant access", async () => {
+    const t = makeTest();
+    const fx = makeThought(TEST_USER_A);
+    const id = await t.withIdentity({ subject: TEST_USER_A }).mutation(api.thoughts.createThought, {
+      content: fx.content,
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fx.fingerprint,
+      metadata: fx.metadata,
+    });
+    await expect(
+      t.withIdentity({ subject: TEST_USER_B }).mutation(api.thoughts.updateContent, {
+        id,
+        content: "stolen",
+        fingerprint: "fp-x".padEnd(64, "0"),
+        metadata: fx.metadata,
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
+  });
 });

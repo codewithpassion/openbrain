@@ -23,6 +23,7 @@
       "!**/build",
       "!**/coverage",
       "!**/routeTree.gen.ts",
+      "!**/_generated",
       "!apps/dashboard/worker-configuration.d.ts"
     ]
   },

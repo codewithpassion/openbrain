@@ -52,6 +52,36 @@ function Shell() {
             <Link to="/search" className="text-muted-foreground hover:text-foreground">
               Search
             </Link>
+            <Link to="/inspector" className="text-muted-foreground hover:text-foreground">
+              Inspector
+            </Link>
+            <Link to="/entities" className="text-muted-foreground hover:text-foreground">
+              Entities
+            </Link>
+            <Link to="/crm" className="text-muted-foreground hover:text-foreground">
+              CRM
+            </Link>
+            <Link to="/briefings" className="text-muted-foreground hover:text-foreground">
+              Briefings
+            </Link>
+            <Link to="/graph" className="text-muted-foreground hover:text-foreground">
+              Graph
+            </Link>
+            <Link to="/digests" className="text-muted-foreground hover:text-foreground">
+              Digests
+            </Link>
+            <Link to="/ingest" className="text-muted-foreground hover:text-foreground">
+              Ingest
+            </Link>
+            <Link to="/quality" className="text-muted-foreground hover:text-foreground">
+              Quality
+            </Link>
+            <Link to="/jobs" className="text-muted-foreground hover:text-foreground">
+              Jobs
+            </Link>
+            <Link to="/audit" className="text-muted-foreground hover:text-foreground">
+              Audit
+            </Link>
             <Link to="/api-keys" className="text-muted-foreground hover:text-foreground">
               API Keys
             </Link>

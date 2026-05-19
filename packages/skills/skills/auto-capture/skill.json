@@ -1,0 +1,7 @@
+{
+  "name": "auto-capture",
+  "title": "Auto Capture",
+  "description": "At session end, capture ACT-NOW items and a session summary into OpenBrains without nagging the user mid-flow.",
+  "version": "0.1.0",
+  "tags": ["capture", "automation", "session"]
+}

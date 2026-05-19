@@ -107,6 +107,74 @@ export const deleteThought = mutation({
   },
 });
 
+/**
+ * Patch a thought's content. The caller (MCP Worker or dashboard) is
+ * responsible for supplying the new fingerprint, metadata, and embedding
+ * model/dims — re-embedding lives outside Convex.
+ *
+ * Fingerprint uniqueness: if the new fingerprint already exists on *another*
+ * thought owned by this user, throw FINGERPRINT_COLLISION so the caller can
+ * surface that the edit would create a duplicate.
+ */
+export const updateContent = mutation({
+  args: {
+    id: v.id("thoughts"),
+    content: v.string(),
+    fingerprint: v.string(),
+    metadata: metadataValidator,
+    embeddingModel: v.optional(v.string()),
+    embeddingDims: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(args.id);
+    if (row === null || row.userId !== userId) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Thought not found" });
+    }
+    if (args.fingerprint !== row.fingerprint) {
+      const collision = await ctx.db
+        .query("thoughts")
+        .withIndex("by_user_fingerprint", (q) =>
+          q.eq("userId", userId).eq("fingerprint", args.fingerprint),
+        )
+        .unique();
+      if (collision !== null && collision._id !== args.id) {
+        throw new ConvexError({
+          code: "FINGERPRINT_COLLISION",
+          message: "Another thought already has this fingerprint",
+        });
+      }
+    }
+    const patch: {
+      content: string;
+      fingerprint: string;
+      metadata: typeof args.metadata;
+      updatedAt: number;
+      embeddingModel?: string;
+      embeddingDims?: number;
+    } = {
+      content: args.content,
+      fingerprint: args.fingerprint,
+      metadata: args.metadata,
+      updatedAt: Date.now(),
+    };
+    if (args.embeddingModel !== undefined) {
+      patch.embeddingModel = args.embeddingModel;
+    }
+    if (args.embeddingDims !== undefined) {
+      patch.embeddingDims = args.embeddingDims;
+    }
+    await ctx.db.patch(args.id, patch);
+    await writeAudit(ctx, {
+      thoughtId: args.id,
+      userId,
+      action: "thought.updateContent",
+      actor: userId,
+      diff: { content: args.content, fingerprint: args.fingerprint },
+    });
+  },
+});
+
 export const attachVectorizeId = mutation({
   args: { id: v.id("thoughts"), vectorizeId: v.string() },
   handler: async (ctx, args) => {

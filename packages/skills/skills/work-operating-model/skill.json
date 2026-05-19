@@ -1,0 +1,7 @@
+{
+  "name": "work-operating-model",
+  "title": "Work Operating Model",
+  "description": "Run a five-layer interview that elicits how the user actually works, then store the approved result as structured OpenBrains records.",
+  "version": "0.1.0",
+  "tags": ["self-model", "interview"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "life-engine",
+  "title": "Life Engine",
+  "description": "Produce a daily briefing from recent thoughts, the entity model, and a stored world-model thought. Output is the source-of-truth for proactive recommendations.",
+  "version": "0.1.0",
+  "tags": ["briefing", "proactive", "life-engine"]
+}

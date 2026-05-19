@@ -52,7 +52,16 @@ function Body() {
         ) : results.length === 0 ? (
           <p className="text-muted-foreground text-sm">No matches.</p>
         ) : (
-          results.map((t) => <ThoughtCard key={t._id} thought={t} />)
+          results.map((t) => (
+            <Link
+              key={t._id}
+              to="/thoughts/$id"
+              params={{ id: t._id }}
+              className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ThoughtCard thought={t} />
+            </Link>
+          ))
         )}
       </div>
     </div>
