@@ -1,0 +1,7 @@
+{
+  "name": "heavy-file-ingestion",
+  "title": "Heavy File Ingestion",
+  "description": "Convert bulky PDFs, decks, and spreadsheets into markdown/CSV with a cheap structural index before downstream analysis runs.",
+  "version": "0.1.0",
+  "tags": ["ingestion", "pdf", "decks"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "weekly-signal-diff",
+  "title": "Weekly Signal Diff",
+  "description": "Compare this week's captures against last week's to surface what's new, what's gone quiet, and what's escalating.",
+  "version": "0.1.0",
+  "tags": ["weekly", "review", "trends"]
+}

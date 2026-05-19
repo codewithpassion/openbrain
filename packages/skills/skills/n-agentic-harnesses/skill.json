@@ -1,0 +1,7 @@
+{
+  "name": "n-agentic-harnesses",
+  "title": "N-Agentic Harnesses",
+  "description": "Run the same task across N agent harnesses (Claude Code, Codex, Cursor, ChatGPT), reconcile their outputs, and write the consensus + the disagreements back to OpenBrains.",
+  "version": "0.1.0",
+  "tags": ["agents", "ensemble", "review"]
+}

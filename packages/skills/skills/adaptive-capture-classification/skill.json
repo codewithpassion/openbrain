@@ -1,0 +1,7 @@
+{
+  "name": "adaptive-capture-classification",
+  "title": "Adaptive Capture Classification",
+  "description": "On capture, infer the right metadata.type for a thought when the caller didn't supply one. Keeps the feed legible without forcing the user to tag.",
+  "version": "0.1.0",
+  "tags": ["capture", "classification", "metadata"]
+}

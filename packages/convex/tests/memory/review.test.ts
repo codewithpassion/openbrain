@@ -145,4 +145,66 @@ describe("memory/review", () => {
       }),
     ).rejects.toThrow(/NOT_FOUND/);
   });
+
+  test("listForUser returns the caller's reviews, newest first", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const t1 = await seedThought(t, TEST_USER_A);
+    const t2 = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.review.submit, {
+      thoughtId: t1,
+      status: "confirmed",
+      reviewer: TEST_USER_A,
+    });
+    await ctxA.mutation(api.memory.review.submit, {
+      thoughtId: t2,
+      status: "needs_revision",
+      reviewer: TEST_USER_A,
+    });
+    const rows = await ctxA.query(api.memory.review.listForUser, {});
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.thoughtId).toBe(t2);
+    expect(rows[1]?.thoughtId).toBe(t1);
+  });
+
+  test("listForUser filters by status when provided", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const t1 = await seedThought(t, TEST_USER_A);
+    const t2 = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.review.submit, {
+      thoughtId: t1,
+      status: "confirmed",
+      reviewer: TEST_USER_A,
+    });
+    await ctxA.mutation(api.memory.review.submit, {
+      thoughtId: t2,
+      status: "needs_revision",
+      reviewer: TEST_USER_A,
+    });
+    const rows = await ctxA.query(api.memory.review.listForUser, {
+      status: "needs_revision",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.thoughtId).toBe(t2);
+  });
+
+  test("listForUser is tenant-scoped", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const ctxB = t.withIdentity({ subject: TEST_USER_B });
+    const tA = await seedThought(t, TEST_USER_A);
+    await ctxA.mutation(api.memory.review.submit, {
+      thoughtId: tA,
+      status: "confirmed",
+      reviewer: TEST_USER_A,
+    });
+    const rowsForB = await ctxB.query(api.memory.review.listForUser, {});
+    expect(rowsForB).toHaveLength(0);
+  });
+
+  test("listForUser rejects unauthenticated callers", async () => {
+    const t = makeTest();
+    await expect(t.query(api.memory.review.listForUser, {})).rejects.toThrow(ConvexError);
+  });
 });

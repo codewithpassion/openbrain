@@ -109,6 +109,48 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_hash", ["hash"]),
 
+  // Phase B: daily digests, stored locally. Email/Slack delivery is deferred.
+  digests: defineTable({
+    userId: v.string(),
+    date: v.string(), // ISO YYYY-MM-DD — the window's *end* day (UTC)
+    summary: v.string(),
+    thoughtIds: v.array(v.id("thoughts")),
+    thoughtCount: v.number(),
+    generator: v.string(), // e.g. "openrouter:openai/gpt-4o-mini" — track for migrations
+    generatedAt: v.number(),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user_generated", ["userId", "generatedAt"]),
+
+  // Phase G: life engine — proactive daily briefing per user.
+  briefings: defineTable({
+    userId: v.string(),
+    date: v.string(), // YYYY-MM-DD UTC
+    summary: v.string(),
+    sections: v.object({
+      recent: v.array(v.string()),
+      followUps: v.array(v.string()),
+      openQuestions: v.array(v.string()),
+    }),
+    thoughtIds: v.array(v.id("thoughts")),
+    generator: v.string(),
+    generatedAt: v.number(),
+  })
+    .index("by_user_date_briefings", ["userId", "date"])
+    .index("by_user_generated_briefings", ["userId", "generatedAt"]),
+
+  // Phase B: scheduled-job run log. Lets the /jobs page show "last run X ago".
+  job_runs: defineTable({
+    name: v.string(), // e.g. "digests.daily"
+    userId: v.optional(v.string()), // optional — some jobs are global
+    status: v.union(v.literal("success"), v.literal("failure"), v.literal("skipped")),
+    startedAt: v.number(),
+    finishedAt: v.number(),
+    note: v.optional(v.string()),
+  })
+    .index("by_name_started", ["name", "startedAt"])
+    .index("by_user_started", ["userId", "startedAt"]),
+
   // Phase C: entity model. `kind` is a free-form string so domain extensions
   // can introduce new kinds (CRM adds "person"/"org" subtypes; Life Engine
   // adds "habit"/"goal"). Canonical names are unique per (user, kind, name).
@@ -148,4 +190,45 @@ export default defineSchema({
     .index("by_user_from", ["userId", "fromEntityId"])
     .index("by_user_to", ["userId", "toEntityId"])
     .index("by_user_kind", ["userId", "kind"]),
+
+  // Phase F: CRM interactions. References an entity (person or org) and the
+  // thought that recorded the contact. `kind` is free-form so domain code can
+  // introduce new categories; the dashboard groups by the canonical set
+  // (meeting, call, email, note).
+  interactions: defineTable({
+    userId: v.string(),
+    entityId: v.id("entities"),
+    thoughtId: v.id("thoughts"),
+    kind: v.string(),
+    at: v.number(),
+    note: v.optional(v.string()),
+  })
+    .index("by_user_entity_at", ["userId", "entityId", "at"])
+    .index("by_user_at", ["userId", "at"]),
+
+  // Phase D: long-running import/export jobs.
+  imports: defineTable({
+    userId: v.string(),
+    source: v.string(), // "gmail" | "obsidian" | "chatgpt" | "brain-restore" | ...
+    direction: v.union(v.literal("import"), v.literal("export")),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("running"),
+      v.literal("success"),
+      v.literal("failure"),
+      v.literal("cancelled"),
+    ),
+    cursor: v.optional(v.string()), // source-specific resume marker
+    stats: v.object({
+      processed: v.number(),
+      created: v.number(),
+      skipped: v.number(),
+      errors: v.number(),
+    }),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_user_status", ["userId", "status"]),
 });

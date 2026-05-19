@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./embeddings": "./src/embeddings/index.ts",
-    "./metadata": "./src/metadata/index.ts"
+    "./entities": "./src/entities/index.ts",
+    "./metadata": "./src/metadata/index.ts",
+    "./sources": "./src/sources/index.ts",
+    "./summarize": "./src/summarize/index.ts"
   },
   "scripts": {
     "test": "bun test",

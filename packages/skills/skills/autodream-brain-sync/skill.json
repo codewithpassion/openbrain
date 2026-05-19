@@ -1,0 +1,7 @@
+{
+  "name": "autodream-brain-sync",
+  "title": "Autodream Brain Sync",
+  "description": "Reconcile a freshly imported batch of thoughts against the existing brain — surface novelties, contradictions, and superseded beliefs.",
+  "version": "0.1.0",
+  "tags": ["sync", "review", "imports"]
+}

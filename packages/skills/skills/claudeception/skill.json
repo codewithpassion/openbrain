@@ -1,0 +1,7 @@
+{
+  "name": "claudeception",
+  "title": "Claudeception",
+  "description": "Extract reusable lessons from a finished work session and propose a new skill pack.",
+  "version": "0.1.0",
+  "tags": ["meta", "self-improving"]
+}

@@ -24,7 +24,7 @@
       "!**/coverage",
       "!**/routeTree.gen.ts",
       "!apps/dashboard/worker-configuration.d.ts",
-      "!**/convex/_generated",
+      "!**/_generated",
       "!.claude/worktrees"
     ]
   },

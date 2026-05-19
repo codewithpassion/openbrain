@@ -1,0 +1,7 @@
+{
+  "name": "financial-model-review",
+  "title": "Financial Model Review",
+  "description": "Review a model for assumption quality, structural risk, and scenario gaps. Highlight everything that would fail under audit.",
+  "version": "0.1.0",
+  "tags": ["finance", "diligence", "model"]
+}

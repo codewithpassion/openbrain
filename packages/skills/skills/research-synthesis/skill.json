@@ -1,0 +1,7 @@
+{
+  "name": "research-synthesis",
+  "title": "Research Synthesis",
+  "description": "Synthesize a set of sources into findings, contradictions, confidence markers, and next questions.",
+  "version": "0.1.0",
+  "tags": ["analysis", "synthesis", "research"]
+}

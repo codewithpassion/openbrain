@@ -1,0 +1,7 @@
+{
+  "name": "world-model-diagnostic",
+  "title": "World Model Diagnostic",
+  "description": "20-minute diagnostic that maps company fit, audits the boundary layer, flags simulated-judgment exposure, and returns a labeled build sequence.",
+  "version": "0.1.0",
+  "tags": ["diagnostic", "world-model", "operator"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "panning-for-gold",
+  "title": "Panning for Gold",
+  "description": "Turn a brain dump or transcript into a numbered, evaluated idea inventory.",
+  "version": "0.1.0",
+  "tags": ["ideation", "brain-dump", "evaluation"]
+}

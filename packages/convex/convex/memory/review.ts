@@ -76,6 +76,35 @@ export const list = query({
 });
 
 /**
+ * Inspector page query: returns the caller's review history, newest first.
+ * No native (userId, reviewedAt) index — the `by_user` index scopes to the
+ * tenant; we sort + slice in JS. Acceptable while review counts stay small
+ * (per-user history, not a feed). If review volume grows, add a dedicated
+ * `by_user_reviewed_at` index.
+ */
+export const listForUser = query({
+  args: {
+    status: v.optional(statusValidator),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const limit = args.limit ?? 50;
+    const rows = await ctx.db
+      .query("memory_review")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const filtered =
+      args.status === undefined ? rows : rows.filter((r) => r.status === args.status);
+    // `_creationTime` is monotonic per insertion; `reviewedAt` can tie when two
+    // reviews land in the same millisecond. Sort by creation time for a stable
+    // "newest first" order.
+    filtered.sort((a, b) => b._creationTime - a._creationTime);
+    return filtered.slice(0, limit);
+  },
+});
+
+/**
  * Promotes a memory_use_policy entry to trustGrade="instruction". Only valid
  * when memory_review has a "confirmed" row for the thought — see CLAUDE.md §7.
  */

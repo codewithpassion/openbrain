@@ -98,12 +98,17 @@ function Body() {
             <p className="text-muted-foreground text-sm">No matches for "{submitted}".</p>
           ) : (
             results.map((r) => (
-              <div key={r.id} className="space-y-1">
+              <Link
+                key={r.id}
+                to="/thoughts/$id"
+                params={{ id: r.id }}
+                className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <p className="text-muted-foreground text-xs">
                   score {r.score.toFixed(3)} · {r.source}
                 </p>
                 <ThoughtCard thought={toThoughtLike(r)} />
-              </div>
+              </Link>
             ))
           )
         ) : (

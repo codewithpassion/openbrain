@@ -67,14 +67,33 @@ bunx convex env set CLERK_DOMAIN your-tenant.clerk.accounts.dev
 ```
 
 Set the shared secret the MCP Worker uses to authenticate to
-`convex/http.ts`:
+`convex/http.ts` (and that Convex actions use back the other way, to
+call the Worker's `/internal/ai/run` for embeddings via Workers AI):
 
 ```bash
 # Generate a 32-byte random value.
 INTERNAL_API_SECRET=$(openssl rand -hex 32)
 bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
-# Save this — you'll set the same value on the Worker side in step 5.
+# Save this — you'll set the same value on the Worker side in step 4.
 echo "$INTERNAL_API_SECRET" > /tmp/ob-internal-api-secret
+```
+
+Once the MCP Worker is deployed (step 4), come back and set its URL so
+Convex actions can reach the AI bridge:
+
+```bash
+bunx convex env set MCP_WORKER_URL https://<your-mcp-worker>.workers.dev
+# No trailing slash. `internal.aiAction.embedInternal` reads this and
+# falls back to {status: "skipped"} if unset, so deployment ordering
+# (Convex first, then Worker, then this) is safe.
+```
+
+Optional — only if you want OpenRouter as a fallback LLM for
+classification / brain-dump splitting. The MCP Worker defaults to the
+Workers AI binding for chat-LLM tools, so this is **not** required:
+
+```bash
+bunx convex env set OPENROUTER_API_KEY sk-or-...
 ```
 
 ## 3. Cloudflare — provision resources
@@ -117,14 +136,16 @@ bunx wrangler secret put CLERK_CLIENT_ID
 bunx wrangler secret put CLERK_CLIENT_SECRET
 bunx wrangler secret put INTERNAL_API_SECRET      # paste /tmp/ob-internal-api-secret
 bunx wrangler secret put DEVICE_FLOW_SECRET       # `openssl rand -hex 32`
-bunx wrangler secret put OPENROUTER_API_KEY       # optional in v1
+bunx wrangler secret put OPENROUTER_API_KEY       # optional — Workers AI is the default
 
 bun --filter @openbrains/mcp deploy
 ```
 
 Note the resulting `https://<worker>.workers.dev` URL — if it differs
 from what you put into the Clerk OAuth redirect list in step 1, update
-the redirect URI in Clerk now.
+the redirect URI in Clerk now. Also go back to step 2 and run
+`bunx convex env set MCP_WORKER_URL https://<worker>.workers.dev` so
+Convex actions can reach `/internal/ai/run`.
 
 ## 5. Dashboard — deploy
 
@@ -197,8 +218,12 @@ token-overlap scorer — same Zod contracts, no Cloudflare bill.
 2. Paste `https://<your-mcp-worker>.workers.dev/mcp` as the MCP URL.
 3. Claude redirects to the Worker's `/authorize`, which redirects to
    Clerk's hosted sign-in.
-4. After approving, Claude lists the OpenBrains tools
-   (`capture_thought`, `search_thoughts`, `memory_recall`, …).
+4. After approving, Claude lists the OpenBrains tools — the v1 set
+   (`capture_thought`, `search_thoughts`, `list_thoughts`,
+   `thought_stats`, `search`, `fetch`, `memory_recall`,
+   `memory_writeback`, `memory_review`) plus the Phase C/E additions
+   (`list_entities`, `get_entity`, `entity_relations`,
+   `classify_thought`, `enrich_thought`, `pan_brain_dump`).
 5. Try a round-trip: ask Claude to "capture a thought: …" then "search
    for thoughts about …". Claude should call the tools and return your
    own data.
@@ -214,6 +239,8 @@ token-overlap scorer — same Zod contracts, no Cloudflare bill.
 | `bun run smoke` env error | Either set `OB_SERVER_URL` + `OB_ACCESS_TOKEN`, or run `ob login` first (the script reads `~/.config/ob/credentials.json` as a fallback). |
 | Search returns no results above threshold | The embedding pipeline silently failed — check Worker logs (`bunx wrangler tail`) for Workers AI 5xx, then confirm the Vectorize index is the `openbrain-thoughts-v1` 1024-dim cosine index from step 3. |
 | Smoke fixtures pile up in your store | v1 has no `deleteThought` MCP tool. Fixtures are tagged `source=smoke` and easy to clean from the Convex dashboard. Tracked as a follow-up. |
+| `classify_thought` / `enrich_thought` / `pan_brain_dump` always return the safe-default fallback | The Workers AI binding is missing or the chat model is throttled. Check `bunx wrangler tail` for 5xx from `@cf/meta/llama-3.1-8b-instruct`. Setting `OPENROUTER_API_KEY` switches the LLM to OpenRouter; the Workers AI splitter/extractor stay as the fallback. |
+| `internal.aiAction.embedInternal` always returns `{status:"skipped"}` | `MCP_WORKER_URL` or `INTERNAL_API_SECRET` not set on the Convex deployment. Re-run `bunx convex env set MCP_WORKER_URL …` from step 2. |
 
 ## 10. Rollback
 

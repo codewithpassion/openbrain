@@ -1,0 +1,7 @@
+{
+  "name": "meeting-synthesis",
+  "title": "Meeting Synthesis",
+  "description": "Convert meeting notes or a transcript into decisions, action items, risks, and follow-up artifacts.",
+  "version": "0.1.0",
+  "tags": ["meetings", "synthesis", "action-items"]
+}
