@@ -8,6 +8,14 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  "ai": { "binding": "AI" },
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "openbrain-thoughts-v1", "remote": true }],
+  "vars": {
+    // EMBEDDING_MODEL defaults to "@cf/qwen/qwen3-embedding-0.6b" in the embedder.
+    // CONVEX_URL is set per-environment via `wrangler secret put` or overridden
+    // in .env.local for dev. Keeping it as a secret avoids leaking deployment
+    // URLs in the committed config.
+  },
   "routes": [
     {
       "custom_domain": true,

@@ -1,11 +1,11 @@
 import { Show } from "@clerk/tanstack-react-start";
-import { api } from "@openbrains/convex/api";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { ThoughtCard } from "../components/thought-card";
-import { filterThoughts, type ThoughtLike } from "../components/thought-card-model";
+import type { ThoughtLike } from "../components/thought-card-model";
 import { Input } from "../components/ui/input";
+import { searchThoughtsFn } from "../server/search";
 
 export const Route = createFileRoute("/search")({ component: Search });
 
@@ -28,31 +28,86 @@ function Search() {
   );
 }
 
+interface SearchResultRow {
+  readonly id: string;
+  readonly score: number;
+  readonly content: string;
+  readonly source: string;
+  readonly createdAt: number;
+}
+
+function toThoughtLike(r: SearchResultRow): ThoughtLike {
+  return {
+    _id: r.id,
+    content: r.content,
+    createdAt: r.createdAt,
+    metadata: { topics: [] },
+  };
+}
+
 function Body() {
+  const search = useServerFn(searchThoughtsFn);
   const [query, setQuery] = useState("");
-  const thoughts = useQuery(api.thoughts.listThoughts, { limit: 50 }) as ThoughtLike[] | undefined;
-  const results = thoughts === undefined ? [] : filterThoughts(thoughts, query);
+  const [submitted, setSubmitted] = useState("");
+  const [results, setResults] = useState<readonly SearchResultRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSubmitted(trimmed);
+    try {
+      const out = await search({ data: { query: trimmed } });
+      setResults(out.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
         <h1 className="font-semibold text-2xl">Search</h1>
         <p className="text-muted-foreground text-xs">
-          v1: client-side filter over the 50 most recent thoughts. Semantic search via Vectorize
-          ships in v2.
+          Semantic search across all your thoughts. Press enter to query.
         </p>
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter recent thoughts…"
-        />
+        <form onSubmit={onSubmit}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search your thoughts…"
+          />
+        </form>
       </div>
       <div className="space-y-3">
-        {thoughts === undefined ? (
-          <p className="text-muted-foreground text-sm">Loading…</p>
-        ) : results.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No matches.</p>
+        {error === null ? (
+          loading ? (
+            <p className="text-muted-foreground text-sm">Searching…</p>
+          ) : results === null ? (
+            <p className="text-muted-foreground text-sm">Enter a query to search.</p>
+          ) : results.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No matches for "{submitted}".</p>
+          ) : (
+            results.map((r) => (
+              <div key={r.id} className="space-y-1">
+                <p className="text-muted-foreground text-xs">
+                  score {r.score.toFixed(3)} · {r.source}
+                </p>
+                <ThoughtCard thought={toThoughtLike(r)} />
+              </div>
+            ))
+          )
         ) : (
-          results.map((t) => <ThoughtCard key={t._id} thought={t} />)
+          <p className="text-destructive text-sm">{error}</p>
         )}
       </div>
     </div>

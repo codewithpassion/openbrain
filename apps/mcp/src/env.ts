@@ -1,32 +1,7 @@
 import type { WorkersAiBinding } from "@openbrains/ingest";
+import type { VectorizeBinding } from "@openbrains/services/deps";
 
-/**
- * Narrow Vectorize binding surface that we actually call. We declare a tiny
- * structural type rather than pulling the full `Vectorize` interface from
- * `@cloudflare/workers-types`; this keeps the shape testable with plain fakes
- * (per CLAUDE.md §2 "narrow ambient type" pattern).
- */
-export interface VectorizeBinding {
-  upsert(
-    vectors: readonly {
-      id: string;
-      values: readonly number[];
-      namespace: string;
-      metadata?: Record<string, string>;
-    }[],
-  ): Promise<unknown>;
-  query(
-    values: readonly number[],
-    options: {
-      topK: number;
-      namespace: string;
-      filter?: Record<string, string>;
-      returnValues?: boolean;
-      returnMetadata?: boolean | "all" | "indexed";
-    },
-  ): Promise<{ matches: readonly { id: string; score: number }[] }>;
-  deleteByIds(ids: readonly string[]): Promise<unknown>;
-}
+export type { VectorizeBinding };
 
 export interface WorkerEnv {
   AI: WorkersAiBinding;

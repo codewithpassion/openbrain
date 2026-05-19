@@ -49,8 +49,14 @@ function Shell() {
             <Link to="/" className="text-muted-foreground hover:text-foreground">
               Capture
             </Link>
+            <Link to="/thoughts" className="text-muted-foreground hover:text-foreground">
+              Thoughts
+            </Link>
             <Link to="/search" className="text-muted-foreground hover:text-foreground">
               Search
+            </Link>
+            <Link to="/stats" className="text-muted-foreground hover:text-foreground">
+              Stats
             </Link>
             <Link to="/api-keys" className="text-muted-foreground hover:text-foreground">
               API Keys
