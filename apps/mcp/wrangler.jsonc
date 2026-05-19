@@ -13,10 +13,16 @@
   // provider's own client / grant / token records. Reusing one binding keeps
   // operational complexity low — one namespace to provision, one to back up,
   // one TTL story to reason about.
-  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_ME" }],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "fff3e77ec5d2496fa6764fe273d0bc05" }],
   "vars": {
-    "CONVEX_URL": "https://example.convex.cloud",
-    "CLERK_DOMAIN": "example.clerk.accounts.dev",
-    "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b"
-  }
+    // "CONVEX_URL": "https://example.convex.cloud",
+    // "CLERK_DOMAIN": "example.clerk.accounts.dev",
+    // "EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b"
+  },
+  "routes": [
+    {
+      "custom_domain": true,
+      "pattern": "obmcp.rockyshoreslabs.io"
+    }
+  ]
 }

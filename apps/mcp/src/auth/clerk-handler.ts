@@ -74,7 +74,22 @@ export function createClerkHandler(args: CreateClerkHandlerArgs): DefaultHandler
     await next();
   });
 
-  app.get("/", (ctx) => ctx.text("openbrains-mcp\n"));
+  // Forgiveness: MCP clients given the bare host URL (without `/mcp`) POST
+  // JSON-RPC straight to `/`. A 404 here surfaces in Claude as a generic
+  // "Authorization with the MCP server failed". Redirect to the real endpoint
+  // with 307 so method, body, and Authorization header are preserved. GET/HEAD
+  // get a human-readable landing.
+  app.all("/", (ctx) => {
+    if (ctx.req.method === "GET" || ctx.req.method === "HEAD") {
+      const url = new URL(ctx.req.url);
+      return ctx.text(
+        `openbrains-mcp\n\nMCP endpoint: ${url.origin}/mcp\nPoint your MCP client at that URL.\n`,
+      );
+    }
+    const url = new URL(ctx.req.url);
+    url.pathname = "/mcp";
+    return ctx.redirect(url.toString(), 307);
+  });
 
   // -----------------------------------------------------------------
   // Device-flow surface — delegated.
