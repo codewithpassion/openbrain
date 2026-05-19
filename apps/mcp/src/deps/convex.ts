@@ -160,14 +160,33 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
     path: string,
     userId: string,
     body: unknown,
-  ): Promise<{ status: number; json: unknown }> {
+  ): Promise<{ status: number; text: string; json: unknown }> {
     const res = await doFetch(`${base}${path}`, {
       method: "POST",
       headers: headers(userId),
       body: JSON.stringify(body),
     });
-    const json = res.status === 204 ? null : ((await res.json()) as unknown);
-    return { status: res.status, json };
+    const text = res.status === 204 ? "" : await res.text();
+    let json: unknown = null;
+    if (text !== "") {
+      try {
+        json = JSON.parse(text) as unknown;
+      } catch {
+        json = null;
+      }
+    }
+    if (res.status < 200 || res.status >= 300 || (text !== "" && json === null)) {
+      console.warn(
+        JSON.stringify({
+          evt: "convex.http",
+          path,
+          status: res.status,
+          bodyLen: text.length,
+          body: text.slice(0, 512),
+        }),
+      );
+    }
+    return { status: res.status, text, json };
   }
 
   async function post<T>(
@@ -176,9 +195,16 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
     body: unknown,
     schema: z.ZodType<T>,
   ): Promise<T> {
-    const { status, json } = await postJson(path, userId, body);
+    const { status, text, json } = await postJson(path, userId, body);
     if (status < 200 || status >= 300) {
-      throw new ConvexHttpError(`convex ${path} failed: ${status.toString()}`, status);
+      const detail = text === "" ? "<empty body>" : text.slice(0, 200);
+      throw new ConvexHttpError(`convex ${path} failed: ${status.toString()} ${detail}`, status);
+    }
+    if (json === null && text === "") {
+      throw new ConvexHttpError(
+        `convex ${path} returned empty body (status ${status.toString()})`,
+        status,
+      );
     }
     return schema.parse(json);
   }

@@ -34,7 +34,7 @@ export interface ApiHandler {
 }
 
 export const mcpApiHandler: ApiHandler = {
-  fetch(request, env, ctx) {
+  async fetch(request, env, ctx) {
     const auth = extractAuth(ctx as unknown as CtxWithProps);
     const opts = env.EMBEDDING_MODEL === undefined ? undefined : { model: env.EMBEDDING_MODEL };
     const deps = {
@@ -46,6 +46,21 @@ export const mcpApiHandler: ApiHandler = {
       embeddings: createEmbedder(env.AI, opts),
     };
     const server = buildServer({ deps, auth });
-    return createMcpHandler(server, { route: "/mcp" })(request, env, ctx);
+    try {
+      return await createMcpHandler(server, { route: "/mcp", enableJsonResponse: true })(
+        request,
+        env,
+        ctx,
+      );
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          evt: "mcp.err",
+          name: err instanceof Error ? err.name : "unknown",
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      throw err;
+    }
   },
 };
