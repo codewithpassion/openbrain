@@ -4,14 +4,17 @@ import { thoughtStatsOutputSchema } from "@openbrains/shared";
 import { createVectorizeClient } from "../../../src/deps/vectorize";
 import { thoughtStatsHandler } from "../../../src/mcp/tools/thought-stats";
 import { makeAuthContext } from "../../helpers/auth";
-import { makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
+import { defaultExtras, makeFakeConvex, makeFakeVectorize } from "../../helpers/fakes";
 
 function setup(userId: string) {
   const convex = makeFakeConvex();
   const vectorize = createVectorizeClient(makeFakeVectorize());
   const embeddings = createFakeEmbedder({ dimensions: 1024 });
   return {
-    envelope: { deps: { convex, vectorize, embeddings }, auth: makeAuthContext(userId) },
+    envelope: {
+      deps: { convex, vectorize, embeddings, ...defaultExtras() },
+      auth: makeAuthContext(userId),
+    },
     convex,
   };
 }

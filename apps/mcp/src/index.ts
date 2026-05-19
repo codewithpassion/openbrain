@@ -5,6 +5,7 @@ import { createDeviceStore } from "./auth/device-store";
 import { DEVICE_TOKEN_PREFIX, signDeviceToken, verifyDeviceToken } from "./auth/device-token";
 import type { AuthProps } from "./auth/types";
 import type { WorkerEnv } from "./env";
+import { handleAiRunRequest, INTERNAL_AI_RUN_PATH } from "./internal/ai-route";
 import { mcpApiHandler } from "./mcp/handler";
 
 const DEVICE_TOKEN_TTL_SECONDS = 3600;
@@ -78,6 +79,13 @@ async function isDeviceCodeGrant(request: Request): Promise<boolean> {
 
 const handler: ExportedHandler<WorkerEnv> = {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === INTERNAL_AI_RUN_PATH) {
+      return await handleAiRunRequest(request, {
+        AI: env.AI,
+        INTERNAL_API_SECRET: env.INTERNAL_API_SECRET,
+      });
+    }
     if (await isDeviceCodeGrant(request)) {
       // Hand the device-code grant to our handler; it owns POST /token for
       // that grant type only.

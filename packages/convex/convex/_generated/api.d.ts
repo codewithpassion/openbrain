@@ -10,8 +10,21 @@
 
 import type * as _lib_audit from "../_lib/audit.js";
 import type * as _lib_identity from "../_lib/identity.js";
+import type * as _lib_jobs from "../_lib/jobs.js";
+import type * as aiAction from "../aiAction.js";
 import type * as apiKeys from "../apiKeys.js";
+import type * as brainBackup from "../brainBackup.js";
+import type * as briefings from "../briefings.js";
+import type * as crm from "../crm.js";
+import type * as digests from "../digests.js";
+import type * as digestsAction from "../digestsAction.js";
+import type * as digestsCron from "../digestsCron.js";
+import type * as entities from "../entities.js";
+import type * as entitiesAction from "../entitiesAction.js";
 import type * as http from "../http.js";
+import type * as imports from "../imports.js";
+import type * as jobs from "../jobs.js";
+import type * as quality from "../quality.js";
 import type * as memory_audit from "../memory/audit.js";
 import type * as memory_provenance from "../memory/provenance.js";
 import type * as memory_recall from "../memory/recall.js";
@@ -31,8 +44,21 @@ import type {
 declare const fullApi: ApiFromModules<{
   "_lib/audit": typeof _lib_audit;
   "_lib/identity": typeof _lib_identity;
+  "_lib/jobs": typeof _lib_jobs;
+  aiAction: typeof aiAction;
   apiKeys: typeof apiKeys;
+  brainBackup: typeof brainBackup;
+  briefings: typeof briefings;
+  crm: typeof crm;
+  digests: typeof digests;
+  digestsAction: typeof digestsAction;
+  digestsCron: typeof digestsCron;
+  entities: typeof entities;
+  entitiesAction: typeof entitiesAction;
   http: typeof http;
+  imports: typeof imports;
+  jobs: typeof jobs;
+  quality: typeof quality;
   "memory/audit": typeof memory_audit;
   "memory/provenance": typeof memory_provenance;
   "memory/recall": typeof memory_recall;

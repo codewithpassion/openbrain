@@ -494,6 +494,131 @@ const memoryReview = httpAction(async (ctx, request) => {
   }
 });
 
+/* -------------------------------------------------------------------------
+ * Entity tools (Phase C)
+ * ----------------------------------------------------------------------- */
+
+interface ListEntitiesBody {
+  kind?: string;
+  limit?: number;
+}
+
+function isListEntitiesBody(body: unknown): body is ListEntitiesBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<ListEntitiesBody>;
+  if (b.kind !== undefined && typeof b.kind !== "string") {
+    return false;
+  }
+  if (b.limit !== undefined && typeof b.limit !== "number") {
+    return false;
+  }
+  return true;
+}
+
+const listEntities = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isListEntitiesBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  const args: { userId: string; kind?: string; limit?: number } = { userId: auth.userId };
+  if (body.kind !== undefined) {
+    args.kind = body.kind;
+  }
+  if (body.limit !== undefined) {
+    args.limit = body.limit;
+  }
+  const rows = await ctx.runQuery(internal.entities.listInternal, args);
+  return jsonResponse({ rows });
+});
+
+interface GetEntityBody {
+  entityId: string;
+  mentionsLimit?: number;
+}
+
+function isGetEntityBody(body: unknown): body is GetEntityBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<GetEntityBody>;
+  if (typeof b.entityId !== "string") {
+    return false;
+  }
+  if (b.mentionsLimit !== undefined && typeof b.mentionsLimit !== "number") {
+    return false;
+  }
+  return true;
+}
+
+const getEntity = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isGetEntityBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  const args: {
+    userId: string;
+    entityId: Id<"entities">;
+    mentionsLimit?: number;
+  } = {
+    userId: auth.userId,
+    entityId: body.entityId as unknown as Id<"entities">,
+  };
+  if (body.mentionsLimit !== undefined) {
+    args.mentionsLimit = body.mentionsLimit;
+  }
+  const result = await ctx.runQuery(internal.entities.getByIdInternal, args);
+  return jsonResponse(result);
+});
+
+interface EntityRelationsBody {
+  entityId: string;
+  limit?: number;
+}
+
+function isEntityRelationsBody(body: unknown): body is EntityRelationsBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<EntityRelationsBody>;
+  if (typeof b.entityId !== "string") {
+    return false;
+  }
+  if (b.limit !== undefined && typeof b.limit !== "number") {
+    return false;
+  }
+  return true;
+}
+
+const entityRelations = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isEntityRelationsBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  const args: { userId: string; entityId: Id<"entities">; limit?: number } = {
+    userId: auth.userId,
+    entityId: body.entityId as unknown as Id<"entities">,
+  };
+  if (body.limit !== undefined) {
+    args.limit = body.limit;
+  }
+  const result = await ctx.runQuery(internal.entities.relationsInternal, args);
+  return jsonResponse(result);
+});
+
 // `api` is imported only so its symbol is preserved in this module's surface
 // for downstream codegen; reference it to suppress noUnusedLocals.
 void api;
@@ -512,5 +637,8 @@ http.route({ path: "/api/thoughts/stats", method: "GET", handler: thoughtStats }
 http.route({ path: "/api/memory/recall", method: "POST", handler: memoryRecall });
 http.route({ path: "/api/memory/writeback", method: "POST", handler: memoryWriteback });
 http.route({ path: "/api/memory/review", method: "POST", handler: memoryReview });
+http.route({ path: "/api/entities/list", method: "POST", handler: listEntities });
+http.route({ path: "/api/entities/get", method: "POST", handler: getEntity });
+http.route({ path: "/api/entities/relations", method: "POST", handler: entityRelations });
 
 export default http;

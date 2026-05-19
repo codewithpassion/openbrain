@@ -1,4 +1,4 @@
-import type { EmbeddingAdapter } from "@openbrains/ingest";
+import type { BrainDumpSplitter, EmbeddingAdapter, MetadataExtractor } from "@openbrains/ingest";
 import type { AuthContext } from "../../auth/types";
 import type { ConvexClient } from "../../deps/convex";
 import type { VectorizeClient } from "../../deps/vectorize";
@@ -7,6 +7,8 @@ export interface ToolDeps {
   convex: ConvexClient;
   vectorize: VectorizeClient;
   embeddings: EmbeddingAdapter;
+  metadata: MetadataExtractor;
+  splitter: BrainDumpSplitter;
 }
 
 export interface ToolEnvelope {

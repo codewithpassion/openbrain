@@ -3,15 +3,16 @@ import { createFakeEmbedder } from "@openbrains/ingest";
 import { createVectorizeClient } from "../../src/deps/vectorize";
 import { buildServer, TOOL_NAMES } from "../../src/mcp/server";
 import { makeAuthContext } from "../helpers/auth";
-import { makeFakeConvex, makeFakeVectorize } from "../helpers/fakes";
+import { defaultExtras, makeFakeConvex, makeFakeVectorize } from "../helpers/fakes";
 
 describe("buildServer", () => {
-  test("registers all v1 tools", () => {
+  test("registers all v1 tools plus Phase C/E extensions", () => {
     const server = buildServer({
       deps: {
         convex: makeFakeConvex(),
         vectorize: createVectorizeClient(makeFakeVectorize()),
         embeddings: createFakeEmbedder({ dimensions: 1024 }),
+        ...defaultExtras(),
       },
       auth: makeAuthContext("user_a"),
     });
@@ -26,6 +27,12 @@ describe("buildServer", () => {
       "memory_recall",
       "memory_writeback",
       "memory_review",
+      "list_entities",
+      "get_entity",
+      "entity_relations",
+      "classify_thought",
+      "enrich_thought",
+      "pan_brain_dump",
     ]);
   });
 });
