@@ -4,6 +4,7 @@ import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Brain, Menu } from "lucide-react";
 import { useState } from "react";
 import { AppSidebar } from "../components/app-sidebar";
+import { NewProjectDialog } from "../components/new-project-dialog";
 import { ProjectSwitcher } from "../components/project-switcher";
 import { Button } from "../components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
@@ -91,6 +92,7 @@ function AuthedShell() {
           </Link>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <ProjectSwitcher />
+            <NewProjectDialog />
             <UserButton />
           </div>
         </header>
