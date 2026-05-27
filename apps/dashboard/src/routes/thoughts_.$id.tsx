@@ -23,7 +23,7 @@ async function sha256Hex(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export const Route = createFileRoute("/thoughts/$id")({ component: ThoughtDetailRoute });
+export const Route = createFileRoute("/thoughts_/$id")({ component: ThoughtDetailRoute });
 
 function ThoughtDetailRoute() {
   return (

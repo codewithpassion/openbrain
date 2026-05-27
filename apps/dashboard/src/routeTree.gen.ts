@@ -24,7 +24,7 @@ import { Route as BriefingsRouteImport } from './routes/briefings'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ThoughtsIdRouteImport } from './routes/thoughts.$id'
+import { Route as ThoughtsIdRouteImport } from './routes/thoughts_.$id'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as EntitiesIdRouteImport } from './routes/entities.$id'
@@ -107,9 +107,9 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ThoughtsIdRoute = ThoughtsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ThoughtsRoute,
+  id: '/thoughts_/$id',
+  path: '/thoughts/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SignUpSplatRoute = SignUpSplatRouteImport.update({
   id: '/sign-up/$',
@@ -152,7 +152,7 @@ export interface FileRoutesByFullPath {
   '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
-  '/thoughts': typeof ThoughtsRouteWithChildren
+  '/thoughts': typeof ThoughtsRoute
   '/crm/$orgId': typeof CrmOrgIdRoute
   '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
@@ -175,7 +175,7 @@ export interface FileRoutesByTo {
   '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
-  '/thoughts': typeof ThoughtsRouteWithChildren
+  '/thoughts': typeof ThoughtsRoute
   '/crm/$orgId': typeof CrmOrgIdRoute
   '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
@@ -199,13 +199,13 @@ export interface FileRoutesById {
   '/quality': typeof QualityRoute
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
-  '/thoughts': typeof ThoughtsRouteWithChildren
+  '/thoughts': typeof ThoughtsRoute
   '/crm/$orgId': typeof CrmOrgIdRoute
   '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
-  '/thoughts/$id': typeof ThoughtsIdRoute
+  '/thoughts_/$id': typeof ThoughtsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -276,7 +276,7 @@ export interface FileRouteTypes {
     | '/entities/$id'
     | '/sign-in/$'
     | '/sign-up/$'
-    | '/thoughts/$id'
+    | '/thoughts_/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -294,9 +294,10 @@ export interface RootRouteChildren {
   QualityRoute: typeof QualityRoute
   SearchRoute: typeof SearchRoute
   StatsRoute: typeof StatsRoute
-  ThoughtsRoute: typeof ThoughtsRouteWithChildren
+  ThoughtsRoute: typeof ThoughtsRoute
   SignInSplatRoute: typeof SignInSplatRoute
   SignUpSplatRoute: typeof SignUpSplatRoute
+  ThoughtsIdRoute: typeof ThoughtsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -406,12 +407,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/thoughts/$id': {
-      id: '/thoughts/$id'
-      path: '/$id'
+    '/thoughts_/$id': {
+      id: '/thoughts_/$id'
+      path: '/thoughts/$id'
       fullPath: '/thoughts/$id'
       preLoaderRoute: typeof ThoughtsIdRouteImport
-      parentRoute: typeof ThoughtsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/sign-up/$': {
       id: '/sign-up/$'
@@ -475,18 +476,6 @@ const EntitiesRouteWithChildren = EntitiesRoute._addFileChildren(
   EntitiesRouteChildren,
 )
 
-interface ThoughtsRouteChildren {
-  ThoughtsIdRoute: typeof ThoughtsIdRoute
-}
-
-const ThoughtsRouteChildren: ThoughtsRouteChildren = {
-  ThoughtsIdRoute: ThoughtsIdRoute,
-}
-
-const ThoughtsRouteWithChildren = ThoughtsRoute._addFileChildren(
-  ThoughtsRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
@@ -502,20 +491,11 @@ const rootRouteChildren: RootRouteChildren = {
   QualityRoute: QualityRoute,
   SearchRoute: SearchRoute,
   StatsRoute: StatsRoute,
-  ThoughtsRoute: ThoughtsRouteWithChildren,
+  ThoughtsRoute: ThoughtsRoute,
   SignInSplatRoute: SignInSplatRoute,
   SignUpSplatRoute: SignUpSplatRoute,
+  ThoughtsIdRoute: ThoughtsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
