@@ -15,8 +15,6 @@ export interface WorkerEnv {
   CONVEX_URL: string;
   CLERK_DOMAIN: string;
   EMBEDDING_MODEL?: string;
-  // Optional — when set, enables LLM-backed tools (classify/enrich/pan).
-  OPENROUTER_API_KEY?: string;
   /**
    * Set to "1" after the operator has created the Vectorize metadata index
    * for `scope`. When unset/0, scope-filtered searches fall back to

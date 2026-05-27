@@ -3,7 +3,7 @@ import type { EntityExtractor, ExtractionResult } from "./types";
 /**
  * Deterministic extractor for tests. Pulls capitalized tokens of length >= 3
  * and emits them as "topic" entities; emits no relations. Real extraction is
- * a job for the OpenRouter adapter.
+ * a job for the Workers AI adapter.
  */
 export function createFakeEntityExtractor(): EntityExtractor {
   function extract(content: string): Promise<ExtractionResult> {

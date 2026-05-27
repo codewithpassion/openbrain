@@ -21,7 +21,7 @@ The briefing is the consumable surface (dashboard, `/briefings`). The briefing-t
 
 ## What this phase adds
 
-1. **`briefingsAction.generateForUserInternal`** — the action. Reads recent thoughts (`thoughts` last 24h), entities (`entities.listInternal`), and the world-model thought (`briefings.worldModelForInternal`). Calls the LLM (OpenRouter, same pattern as `digestsAction`). Persists the briefing via `briefings.recordInternal`. Then…
+1. **`briefingsAction.generateForUserInternal`** — the action. Reads recent thoughts (`thoughts` last 24h), entities (`entities.listInternal`), and the world-model thought (`briefings.worldModelForInternal`). Calls the LLM (Workers AI via the dashboard worker chat bridge, same pattern as `digestsAction`). Persists the briefing via `briefings.recordInternal`. Then…
 2. **`briefings.recordInternal` emits a child thought** — after writing the briefing row, the same internal mutation inserts a `thoughts` row with `source: "life-engine:briefing"`, `metadata.type: "briefing"`, and the briefing summary as content. The new thought stores no `parentThoughtId` (briefings don't have a parent thought) but its `source` makes provenance explicit. **Sidecars**: a `memory_provenance` row at `origin: "agent_generated"`, `agent: "life-engine"` and a `memory_use_policy` at `trustGrade: "evidence"` (per CLAUDE.md §7 — agent-generated memory defaults to evidence). Idempotent: re-running for the same `(userId, date)` patches the existing briefing **and** patches the existing briefing-thought; sidecars are inserted-if-missing.
 3. **`briefingsCron.ts`** — once-daily cron, fans out per user. Mirrors `digestsCron.ts`.
 4. **Tests** — TDD. Failing test first for the new mutation behaviour (recordInternal now writes a paired thought) and for the action's skipped-when-env-missing path.
@@ -42,7 +42,7 @@ The briefing is the consumable surface (dashboard, `/briefings`). The briefing-t
 ## Done-when
 
 - `bun run check` green.
-- Calling `briefingsAction.generateForUserInternal({ userId })` in a test with `OPENROUTER_API_KEY` unset returns `{ status: "skipped" }` and writes no rows.
+- Calling `briefingsAction.generateForUserInternal({ userId })` in a test with `DASHBOARD_WORKER_URL` unset returns `{ status: "skipped" }` and writes no rows.
 - Calling `briefings.recordInternal` twice with the same `(userId, date)` results in **one** briefing row and **one** briefing-thought, both updated.
 - Calling `briefings.recordInternal` once writes a `thought` row with `metadata.type === "briefing"`.
 - Briefing-thoughts surface in `list_thoughts` with `type: "briefing"`.

@@ -143,7 +143,7 @@ export default defineSchema({
     summary: v.string(),
     thoughtIds: v.array(v.id("thoughts")),
     thoughtCount: v.number(),
-    generator: v.string(), // e.g. "openrouter:openai/gpt-4o-mini" — track for migrations
+    generator: v.string(), // e.g. "workers-ai:@cf/meta/llama-3.1-8b-instruct" — track for migrations
     generatedAt: v.number(),
   })
     .index("by_user_date", ["userId", "date"])

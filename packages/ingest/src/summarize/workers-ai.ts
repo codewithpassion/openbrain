@@ -22,9 +22,8 @@ interface WorkersAiChatBinding {
 }
 
 /**
- * Workers AI-backed digest summarizer. Mirrors the OpenRouter adapter's
- * interface so callers can swap one for the other. Failure returns a fallback
- * marker rather than throwing; the caller decides whether to persist.
+ * Workers AI-backed digest summarizer. Failure returns a fallback marker
+ * rather than throwing; the caller decides whether to persist.
  */
 export function createWorkersAiDigestSummarizer(opts: {
   ai: WorkersAiChatBinding;

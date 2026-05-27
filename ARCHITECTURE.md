@@ -15,8 +15,8 @@ A reimplementation of [Nate B. Jones's Open Brain (OB1)](https://github.com/Nate
 | Dashboard | **TanStack Start** (CF Workers template) + **shadcn/ui** | Official CF template; auto-detected by `wrangler deploy`. |
 | Backend data layer | **Convex** | Reactive queries, mutations, scheduled jobs. Clerk integration built in. |
 | Capture surfaces (v1) | Dashboard quick-capture + `ob` **CLI** | CLI doubles as a reference MCP client. |
-| LLM gateway (metadata extraction, classify/enrich/pan tools) | **Workers AI** (`@cf/meta/llama-3.1-8b-instruct`) is the MCP Worker default; `OPENROUTER_API_KEY` is an optional override that falls back to Workers AI on failure. Convex actions (digests, entity extraction) still default to OpenRouter — they don't share the binding. | Adapter interface (`MetadataExtractor`, `BrainDumpSplitter`) makes swapping costless. |
-| Convex → Workers AI bridge | `POST /internal/ai/run` on the MCP Worker, protected by `INTERNAL_API_SECRET`. Convex actions use `createWorkersAiHttpClient` to call it. | Convex doesn't have an `AI` binding; this is the only path. Gated on `MCP_WORKER_URL`. |
+| LLM gateway (metadata extraction, classify/enrich/pan tools) | **Workers AI** (`@cf/meta/llama-3.1-8b-instruct`) everywhere. MCP Worker uses its native `AI` binding directly; Convex actions reach it via the dashboard worker's chat bridge. | Adapter interface (`MetadataExtractor`, `BrainDumpSplitter`, `EntityExtractor`, `DigestSummarizer`) makes swapping costless. |
+| Convex → Workers AI bridges | `POST /internal/ai/run` on the MCP Worker (embeddings) and `POST /internal/ai/chat` on the dashboard worker (chat completions), both protected by `INTERNAL_API_SECRET`. Convex actions use `createWorkersAiHttpClient` / `createWorkersAiHttpChatClient`. | Convex doesn't have an `AI` binding; these are the only paths. Gated on `MCP_WORKER_URL` and `DASHBOARD_WORKER_URL`. |
 
 ## System diagram
 
@@ -217,7 +217,7 @@ The last three are the Agent Memory sidecar surface. They're what makes this ver
 
 ### Phase E — LLM workflow primitives (read-only, no persistence)
 
-All three accept an injected `MetadataExtractor` / `BrainDumpSplitter` (Workers AI by default, OpenRouter override). The tools surface LLM output — they don't mutate the thought; callers can pipe results into `capture_thought` or a future `update_thought`.
+All three accept an injected `MetadataExtractor` / `BrainDumpSplitter` (Workers AI). The tools surface LLM output — they don't mutate the thought; callers can pipe results into `capture_thought` or a future `update_thought`.
 
 | Tool | Read-only | Notes |
 | --- | --- | --- |
@@ -348,7 +348,7 @@ Introduces Convex scheduled actions. Daily digest is the smallest reference impl
 Adds:
 
 - Convex `digests` table: `{ userId, date, summary, thoughtIds[], generatedAt }`.
-- `digests.generateForUser` internal action — summarizes last 24h via the existing OpenRouter metadata-extraction adapter.
+- `digests.generateForUser` internal action — summarizes last 24h via the Workers AI digest summarizer (through the dashboard worker chat bridge).
 - Convex cron: once-daily per user.
 - `apps/dashboard/src/routes/digests.tsx` — list digests, "regenerate now" button.
 - `apps/dashboard/src/routes/jobs.tsx` — Scheduled-jobs status page.

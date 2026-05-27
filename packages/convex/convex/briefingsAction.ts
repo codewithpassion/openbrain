@@ -6,7 +6,7 @@
  *   - Recent (24h) thoughts via `digests.collectWindowInternal`
  *   - The user's instruction-grade world-model thought via
  *     `briefings.worldModelForInternal` (may be null — briefings still run)
- *   - The LLM summary via `createOpenRouterDigestSummarizer`
+ *   - The LLM summary via `createWorkersAiDigestSummarizer`
  *
  * Output:
  *   - One `briefings` row per (userId, date) — idempotent

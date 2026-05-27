@@ -1,7 +1,5 @@
 import {
   createFakeBrainDumpSplitter,
-  createOpenRouterBrainDumpSplitter,
-  createOpenRouterMetadataExtractor,
   createWorkersAiBrainDumpSplitter,
   createWorkersAiMetadataExtractor,
   type WorkersAiBinding,
@@ -56,29 +54,15 @@ export const mcpApiHandler: ApiHandler = {
   async fetch(request, env, ctx) {
     const auth = extractAuth(ctx as unknown as CtxWithProps);
     const opts = env.EMBEDDING_MODEL === undefined ? undefined : { model: env.EMBEDDING_MODEL };
-    // Default to Workers AI (the Worker already binds it). OpenRouter remains
-    // a configurable fallback for cases where a stronger model is needed —
-    // when the key is set, it shadows the Workers AI path. Either way the
-    // fake (single-thought passthrough / safe default metadata) is the last
-    // resort so tools never throw at runtime.
+    // The Worker already binds Workers AI. The fake splitter
+    // (single-thought passthrough / safe default metadata) is the last-resort
+    // fallback so tools never throw at runtime.
     const ai = asChatAi(env.AI);
-    const openrouterKey = env.OPENROUTER_API_KEY;
-    const hasOpenrouter = openrouterKey !== undefined && openrouterKey !== "";
-    const metadata = hasOpenrouter
-      ? createOpenRouterMetadataExtractor({
-          apiKey: openrouterKey,
-          fallback: createWorkersAiMetadataExtractor({ ai }),
-        })
-      : createWorkersAiMetadataExtractor({ ai });
-    const splitter = hasOpenrouter
-      ? createOpenRouterBrainDumpSplitter({
-          apiKey: openrouterKey,
-          fallback: createWorkersAiBrainDumpSplitter({
-            ai,
-            fallback: createFakeBrainDumpSplitter(),
-          }),
-        })
-      : createWorkersAiBrainDumpSplitter({ ai, fallback: createFakeBrainDumpSplitter() });
+    const metadata = createWorkersAiMetadataExtractor({ ai });
+    const splitter = createWorkersAiBrainDumpSplitter({
+      ai,
+      fallback: createFakeBrainDumpSplitter(),
+    });
     const scopeIndexReady = env.SCOPE_INDEX_READY === "1" || env.SCOPE_INDEX_READY === "true";
     const deps = {
       convex: createConvexClient({

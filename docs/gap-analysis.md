@@ -54,7 +54,7 @@ Spec: dashboard wiring + skill-pack convention. **No new tables.**
 | --- | --- | --- |
 | `entities` / `entity_mentions` / `entity_relations` tables | ✅ | `schema.ts` |
 | Entity extraction action | ✅ | `entitiesAction.extractFromThoughtInternal` |
-| Typed-edge classifier | ✅ | OpenRouter entity adapter returns relations with `kind` + confidence |
+| Typed-edge classifier | ✅ | Workers AI entity adapter returns relations with `kind` + confidence |
 | Dashboard `/entities` (list) | ✅ | committed |
 | Dashboard `/entities/$id` (wiki page) | ✅ | committed |
 | Dashboard `/graph` (ob-graph viz) | ✅ | `react-force-graph-2d` canvas, `buildGraphModel` |
@@ -161,9 +161,9 @@ audit. Every item below has tests + green `bun run check`.
 
 - New `convex/thoughtsAction.ts`: three internal actions —
   `classifyOnCaptureInternal`, `enrichThoughtInternal`,
-  `splitBrainDumpInternal`. Each calls the existing OpenRouter
-  metadata/splitter adapter and persists via internal mutations on
-  `thoughts.ts`.
+  `splitBrainDumpInternal`. Each calls the Workers AI
+  metadata/splitter adapter (via the dashboard worker chat bridge) and
+  persists via internal mutations on `thoughts.ts`.
 - New `thoughts` internal mutations: `setTypeInternal`,
   `mergeMetadataInternal`, `persistSplitInternal`.
 - Schema: `thoughts.parentThoughtId` (optional `v.id("thoughts")`) +
@@ -204,10 +204,10 @@ audit. Every item below has tests + green `bun run check`.
 - New `docs/phase-g-scope.md` — one-page scope doc per gap-analysis
   recommendation.
 - New `convex/briefingsAction.generateForUserInternal`: reads recent
-  thoughts + world-model thought + entities, summarizes via OpenRouter,
+  thoughts + world-model thought + entities, summarizes via Workers AI,
   records the briefing via `briefings.recordInternal`. Skipped when
-  `OPENROUTER_API_KEY` is unset (best-effort, parallel to
-  `digestsAction`).
+  `DASHBOARD_WORKER_URL` / `INTERNAL_API_SECRET` are unset (best-effort,
+  parallel to `digestsAction`).
 - `briefings.recordInternal` now writes a paired `thoughts` row with
   `metadata.type === "briefing"` and `source: "life-engine:briefing"`.
   Idempotent on `(userId, date)` via a derived fingerprint.

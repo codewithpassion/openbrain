@@ -8,7 +8,7 @@ const sample: DigestLike = {
   date: "2026-05-18",
   summary: "- went deep on workers ai\n- sketched a new pipeline",
   thoughtCount: 7,
-  generator: "openrouter:openai/gpt-4o-mini",
+  generator: "workers-ai:@cf/meta/llama-3.1-8b-instruct",
   generatedAt: NOW - 5 * 60_000,
 };
 

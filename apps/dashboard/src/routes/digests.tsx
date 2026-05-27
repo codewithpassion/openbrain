@@ -45,7 +45,7 @@ function Body() {
         out.status === "success"
           ? `Generated digest from ${out.thoughtCount} thought(s).`
           : out.status === "skipped"
-            ? "Skipped — OPENROUTER_API_KEY not set."
+            ? "Skipped — DASHBOARD_WORKER_URL not set."
             : "Generation failed. See the Jobs page.",
       );
     } catch (e) {

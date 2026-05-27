@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createFakeBrainDumpSplitter,
-  createOpenRouterBrainDumpSplitter,
-  createWorkersAiBrainDumpSplitter,
-} from "../src/splitter";
+import { createFakeBrainDumpSplitter, createWorkersAiBrainDumpSplitter } from "../src/splitter";
 
 describe("fake brain-dump splitter", () => {
   test("splits bulleted lines into ideas, capped by maxIdeas", async () => {
@@ -19,86 +15,6 @@ describe("fake brain-dump splitter", () => {
     const splitter = createFakeBrainDumpSplitter();
     const ideas = await splitter.split("first thought\n\nsecond thought", 5);
     expect(ideas.length).toBe(2);
-  });
-});
-
-describe("openrouter brain-dump splitter", () => {
-  test("parses a JSON response into ideas", async () => {
-    const splitter = createOpenRouterBrainDumpSplitter({
-      apiKey: "k",
-      fetch: () =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      ideas: [
-                        { content: "do A", type: "task", topics: ["work"] },
-                        { content: "note B", topics: [] },
-                      ],
-                    }),
-                  },
-                },
-              ],
-            }),
-            { status: 200 },
-          ),
-        ),
-    });
-    const ideas = await splitter.split("blob", 10);
-    expect(ideas.length).toBe(2);
-    expect(ideas[0]?.type).toBe("task");
-  });
-
-  test("on HTTP failure falls back to single-idea passthrough", async () => {
-    const splitter = createOpenRouterBrainDumpSplitter({
-      apiKey: "k",
-      fetch: () => Promise.resolve(new Response("nope", { status: 500 })),
-    });
-    const ideas = await splitter.split("a single thought", 3);
-    expect(ideas).toEqual([{ content: "a single thought", topics: [] }]);
-  });
-
-  test("on HTTP failure delegates to supplied fallback", async () => {
-    const splitter = createOpenRouterBrainDumpSplitter({
-      apiKey: "k",
-      fetch: () => Promise.resolve(new Response("nope", { status: 500 })),
-      fallback: createFakeBrainDumpSplitter(),
-    });
-    const ideas = await splitter.split("- one\n- two", 5);
-    expect(ideas.map((i) => i.content)).toEqual(["one", "two"]);
-  });
-
-  test("caps results at maxIdeas even if model returns more (openrouter)", async () => {
-    const splitter = createOpenRouterBrainDumpSplitter({
-      apiKey: "k",
-      fetch: () =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      ideas: [
-                        { content: "a" },
-                        { content: "b" },
-                        { content: "c" },
-                        { content: "d" },
-                      ],
-                    }),
-                  },
-                },
-              ],
-            }),
-            { status: 200 },
-          ),
-        ),
-    });
-    const ideas = await splitter.split("blob", 2);
-    expect(ideas.map((i) => i.content)).toEqual(["a", "b"]);
   });
 });
 

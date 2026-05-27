@@ -96,12 +96,6 @@ bunx convex env set DASHBOARD_WORKER_URL https://<your-dashboard>.workers.dev
 # the Workers, then setting these) is safe.
 ```
 
-> OpenRouter as an LLM provider is no longer used by Convex actions —
-> classification, enrichment, brain-dump split, entity extraction,
-> digests, and briefings all call Workers AI through the dashboard
-> worker. The MCP Worker still accepts an optional `OPENROUTER_API_KEY`
-> secret as an override for *its* chat-LLM tools (step 4).
-
 ## 3. Cloudflare — provision resources
 
 From the repo root:
@@ -142,7 +136,6 @@ bunx wrangler secret put CLERK_CLIENT_ID
 bunx wrangler secret put CLERK_CLIENT_SECRET
 bunx wrangler secret put INTERNAL_API_SECRET      # paste /tmp/ob-internal-api-secret
 bunx wrangler secret put DEVICE_FLOW_SECRET       # `openssl rand -hex 32`
-bunx wrangler secret put OPENROUTER_API_KEY       # optional — Workers AI is the default
 
 bun --filter @openbrains/mcp deploy
 ```
@@ -245,7 +238,7 @@ token-overlap scorer — same Zod contracts, no Cloudflare bill.
 | `bun run smoke` env error | Either set `OB_SERVER_URL` + `OB_ACCESS_TOKEN`, or run `ob login` first (the script reads `~/.config/ob/credentials.json` as a fallback). |
 | Search returns no results above threshold | The embedding pipeline silently failed — check Worker logs (`bunx wrangler tail`) for Workers AI 5xx, then confirm the Vectorize index is the `openbrain-thoughts-v1` 1024-dim cosine index from step 3. |
 | Smoke fixtures pile up in your store | v1 has no `deleteThought` MCP tool. Fixtures are tagged `source=smoke` and easy to clean from the Convex dashboard. Tracked as a follow-up. |
-| `classify_thought` / `enrich_thought` / `pan_brain_dump` always return the safe-default fallback | The Workers AI binding is missing or the chat model is throttled. Check `bunx wrangler tail` for 5xx from `@cf/meta/llama-3.1-8b-instruct`. Setting `OPENROUTER_API_KEY` switches the LLM to OpenRouter; the Workers AI splitter/extractor stay as the fallback. |
+| `classify_thought` / `enrich_thought` / `pan_brain_dump` always return the safe-default fallback | The Workers AI binding is missing or the chat model is throttled. Check `bunx wrangler tail` for 5xx from `@cf/meta/llama-3.1-8b-instruct`. |
 | `internal.aiAction.embedInternal` always returns `{status:"skipped"}` | `MCP_WORKER_URL` or `INTERNAL_API_SECRET` not set on the Convex deployment. Re-run `bunx convex env set MCP_WORKER_URL …` from step 2. |
 | `entitiesAction.extractFromThoughtInternal`, `classifyOnCaptureInternal`, `enrichThoughtInternal`, `splitBrainDumpInternal`, `digestsAction.*`, or `briefingsAction.*` returns `{status:"skipped"}` | `DASHBOARD_WORKER_URL` or `INTERNAL_API_SECRET` not set on the Convex deployment. Re-run `bunx convex env set DASHBOARD_WORKER_URL …` from step 2. |
 

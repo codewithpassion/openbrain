@@ -1,5 +1,4 @@
 export { createFakeEntityExtractor } from "./fake";
-export { createOpenRouterEntityExtractor } from "./openrouter";
 export type {
   EntityExtractor,
   ExtractedEntity,
