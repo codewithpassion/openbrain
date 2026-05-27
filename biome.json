@@ -146,6 +146,7 @@
       "includes": [
         "apps/dashboard/src/routes/**",
         "apps/dashboard/src/router.tsx",
+        "apps/dashboard/src/worker-entry.ts",
         "apps/dashboard/vite.config.ts"
       ],
       "linter": {

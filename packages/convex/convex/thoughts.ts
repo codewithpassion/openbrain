@@ -358,6 +358,11 @@ async function createThoughtCore(
     diff: { content: args.content, source: args.source, scope: args.scope ?? null },
   });
   await scheduleClassifyOnCapture(ctx, userId, id, args.metadata.type);
+  await ctx.scheduler.runAfter(0, internal.entitiesAction.extractFromThoughtInternal, {
+    userId,
+    thoughtId: id,
+    content: args.content,
+  });
   return id;
 }
 

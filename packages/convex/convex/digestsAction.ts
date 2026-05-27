@@ -1,7 +1,9 @@
-import { createOpenRouterDigestSummarizer } from "@openbrains/ingest/summarize";
+import { createWorkersAiHttpChatClient } from "@openbrains/ingest/chat";
+import { createWorkersAiDigestSummarizer } from "@openbrains/ingest/summarize";
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { action, internalAction } from "./_generated/server.js";
+import { readChatBridgeEnv } from "./_lib/chatEnv.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -25,10 +27,11 @@ interface CollectResult {
  * — re-running for the same window just updates the existing digest row.
  *
  * Decisions:
- * - Summarizer is built per-invocation from OPENROUTER_API_KEY. No global
- *   instance because Convex actions are stateless.
- * - Failures (missing API key, network) record a job_run with status=failure
- *   but do NOT throw — the cron is best-effort.
+ * - Summarizer is built per-invocation against the dashboard worker's
+ *   `/internal/ai/chat` Workers AI bridge. No global instance because Convex
+ *   actions are stateless.
+ * - Failures (missing bridge env, network) record a job_run with
+ *   status=skipped/failure but do NOT throw — the cron is best-effort.
  */
 export type DigestRunOutcome =
   | { status: "skipped" }
@@ -45,16 +48,15 @@ export const generateForUserInternal = internalAction({
     const windowEndMs = args.windowEndMs ?? startedAt;
     const windowStartMs = windowEndMs - DAY_MS;
 
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const apiKey = process.env["OPENROUTER_API_KEY"];
-    if (apiKey === undefined || apiKey === "") {
+    const chatEnv = readChatBridgeEnv();
+    if ("skipped" in chatEnv) {
       await ctx.runMutation(internal.jobs.recordRunInternal, {
         name: "digests.daily",
         userId: args.userId,
         status: "skipped",
         startedAt,
         finishedAt: Date.now(),
-        note: "OPENROUTER_API_KEY not set",
+        note: chatEnv.skipped,
       });
       return { status: "skipped" as const };
     }
@@ -78,7 +80,11 @@ export const generateForUserInternal = internalAction({
       return { status: "failure" as const };
     }
 
-    const summarizer = createOpenRouterDigestSummarizer({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: chatEnv.baseUrl,
+      internalSecret: chatEnv.secret,
+    });
+    const summarizer = createWorkersAiDigestSummarizer({ ai });
     const summary = await summarizer.summarize(
       collected.thoughts.map((t) => {
         const src: {

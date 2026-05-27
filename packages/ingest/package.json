@@ -5,6 +5,7 @@
   "version": "0.0.0",
   "exports": {
     ".": "./src/index.ts",
+    "./chat": "./src/chat/index.ts",
     "./embeddings": "./src/embeddings/index.ts",
     "./entities": "./src/entities/index.ts",
     "./metadata": "./src/metadata/index.ts",

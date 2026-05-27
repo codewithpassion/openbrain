@@ -1,8 +1,10 @@
-import { createOpenRouterEntityExtractor } from "@openbrains/ingest/entities";
+import { createWorkersAiHttpChatClient } from "@openbrains/ingest/chat";
+import { createWorkersAiEntityExtractor } from "@openbrains/ingest/entities";
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import { internalAction } from "./_generated/server.js";
+import { readChatBridgeEnv } from "./_lib/chatEnv.js";
 
 export type ExtractionOutcome =
   | { status: "skipped"; reason: string }
@@ -11,12 +13,15 @@ export type ExtractionOutcome =
 export const extractFromThoughtInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts"), content: v.string() },
   handler: async (ctx, args): Promise<ExtractionOutcome> => {
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const apiKey = process.env["OPENROUTER_API_KEY"];
-    if (apiKey === undefined || apiKey === "") {
-      return { status: "skipped", reason: "OPENROUTER_API_KEY not set" };
+    const env = readChatBridgeEnv();
+    if ("skipped" in env) {
+      return { status: "skipped", reason: env.skipped };
     }
-    const extractor = createOpenRouterEntityExtractor({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: env.baseUrl,
+      internalSecret: env.secret,
+    });
+    const extractor = createWorkersAiEntityExtractor({ ai });
     const result = await extractor.extract(args.content);
 
     const nameToId = new Map<string, Id<"entities">>();

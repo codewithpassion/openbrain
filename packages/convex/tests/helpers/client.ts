@@ -16,6 +16,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./_lib/identity.ts": () => import("../../convex/_lib/identity"),
   "./_lib/audit.ts": () => import("../../convex/_lib/audit"),
   "./_lib/jobs.ts": () => import("../../convex/_lib/jobs"),
+  "./_lib/chatEnv.ts": () => import("../../convex/_lib/chatEnv"),
   "./projects.ts": () => import("../../convex/projects"),
   "./thoughts.ts": () => import("../../convex/thoughts"),
   "./thoughtsAction.ts": () => import("../../convex/thoughtsAction"),

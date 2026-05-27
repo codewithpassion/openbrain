@@ -4,23 +4,27 @@
  *
  * Adaptive capture: when a thought lands without `metadata.type`, the
  * `createThought` mutation schedules `classifyOnCaptureInternal` via
- * `ctx.scheduler.runAfter(0, ...)`. The action calls the LLM and patches the
- * type back via `thoughts.setTypeInternal`. If `OPENROUTER_API_KEY` is unset
- * we record a `skipped` outcome — never throw — so the cron-style hooks stay
- * best-effort.
+ * `ctx.scheduler.runAfter(0, ...)`. The action calls Workers AI (via the
+ * dashboard worker's `/internal/ai/chat` bridge) and patches the type back via
+ * `thoughts.setTypeInternal`. If `DASHBOARD_WORKER_URL` /
+ * `INTERNAL_API_SECRET` are unset we record a `skipped` outcome — never throw
+ * — so the cron-style hooks stay best-effort.
  *
  * Enrichment & panning follow the same shape: action talks to the LLM, an
  * internal mutation does the boundary-safe persistence.
  */
+
 import {
-  createOpenRouterBrainDumpSplitter,
-  createOpenRouterMetadataExtractor,
+  createWorkersAiBrainDumpSplitter,
   createWorkersAiEmbedder,
   createWorkersAiHttpClient,
 } from "@openbrains/ingest";
+import { createWorkersAiHttpChatClient } from "@openbrains/ingest/chat";
+import { createWorkersAiMetadataExtractor } from "@openbrains/ingest/metadata";
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalAction } from "./_generated/server.js";
+import { readChatBridgeEnv } from "./_lib/chatEnv.js";
 
 const DEFAULT_EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b";
 
@@ -66,21 +70,12 @@ export type DeleteVectorOutcome =
   | { status: "failure"; reason: string }
   | { status: "success" };
 
-function readApiKey(): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-  const key = process.env["OPENROUTER_API_KEY"];
-  if (key === undefined || key === "") {
-    return undefined;
-  }
-  return key;
-}
-
 export const classifyOnCaptureInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts") },
   handler: async (ctx, args): Promise<ClassifyOutcome> => {
-    const apiKey = readApiKey();
-    if (apiKey === undefined) {
-      return { status: "skipped", reason: "OPENROUTER_API_KEY not set" };
+    const chatEnv = readChatBridgeEnv();
+    if ("skipped" in chatEnv) {
+      return { status: "skipped", reason: chatEnv.skipped };
     }
     const thought = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
       userId: args.userId,
@@ -92,7 +87,11 @@ export const classifyOnCaptureInternal = internalAction({
     if (thought.metadata.type !== undefined && thought.metadata.type !== "") {
       return { status: "noop", reason: "type already set" };
     }
-    const extractor = createOpenRouterMetadataExtractor({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: chatEnv.baseUrl,
+      internalSecret: chatEnv.secret,
+    });
+    const extractor = createWorkersAiMetadataExtractor({ ai });
     const metadata = await extractor.extract(thought.content);
     if (metadata.type === undefined) {
       return { status: "noop", reason: "extractor returned no type" };
@@ -112,9 +111,9 @@ export const classifyOnCaptureInternal = internalAction({
 export const enrichThoughtInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts") },
   handler: async (ctx, args): Promise<EnrichOutcome> => {
-    const apiKey = readApiKey();
-    if (apiKey === undefined) {
-      return { status: "skipped", reason: "OPENROUTER_API_KEY not set" };
+    const chatEnv = readChatBridgeEnv();
+    if ("skipped" in chatEnv) {
+      return { status: "skipped", reason: chatEnv.skipped };
     }
     const thought = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
       userId: args.userId,
@@ -123,7 +122,11 @@ export const enrichThoughtInternal = internalAction({
     if (thought === null) {
       return { status: "failure", reason: "thought not found" };
     }
-    const extractor = createOpenRouterMetadataExtractor({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: chatEnv.baseUrl,
+      internalSecret: chatEnv.secret,
+    });
+    const extractor = createWorkersAiMetadataExtractor({ ai });
     const metadata = await extractor.extract(thought.content);
     await ctx.runMutation(internal.thoughts.mergeMetadataInternal, {
       userId: args.userId,
@@ -255,9 +258,9 @@ export const splitBrainDumpInternal = internalAction({
     maxIdeas: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<SplitOutcome> => {
-    const apiKey = readApiKey();
-    if (apiKey === undefined) {
-      return { status: "skipped", reason: "OPENROUTER_API_KEY not set" };
+    const chatEnv = readChatBridgeEnv();
+    if ("skipped" in chatEnv) {
+      return { status: "skipped", reason: chatEnv.skipped };
     }
     const parent = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
       userId: args.userId,
@@ -266,7 +269,11 @@ export const splitBrainDumpInternal = internalAction({
     if (parent === null) {
       return { status: "failure", reason: "parent thought not found" };
     }
-    const splitter = createOpenRouterBrainDumpSplitter({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: chatEnv.baseUrl,
+      internalSecret: chatEnv.secret,
+    });
+    const splitter = createWorkersAiBrainDumpSplitter({ ai });
     const ideas = await splitter.split(parent.content, args.maxIdeas ?? 5);
     const result = await ctx.runMutation(internal.thoughts.persistSplitInternal, {
       userId: args.userId,

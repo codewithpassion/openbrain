@@ -194,33 +194,44 @@ describe("thoughts.persistSplitInternal", () => {
 });
 
 describe("thoughtsAction internal actions", () => {
-  test("classifyOnCaptureInternal skips when OPENROUTER_API_KEY is unset", async () => {
+  function setEnv(key: string, value: string | undefined): void {
+    if (value === undefined) {
+      Reflect.deleteProperty(process.env, key);
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  function withEnvCleared<T>(keys: readonly string[], fn: () => Promise<T>): Promise<T> {
+    const prior = new Map<string, string | undefined>();
+    for (const k of keys) {
+      prior.set(k, process.env[k]);
+      setEnv(k, undefined);
+    }
+    return fn().finally(() => {
+      for (const [k, v] of prior) {
+        setEnv(k, v);
+      }
+    });
+  }
+
+  test("classifyOnCaptureInternal skips when DASHBOARD_WORKER_URL is unset", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A);
-    // Ensure the env is empty for this test.
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const prior = process.env["OPENROUTER_API_KEY"];
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    delete process.env["OPENROUTER_API_KEY"];
-    try {
+    await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
       const out = await t.action(internal.thoughtsAction.classifyOnCaptureInternal, {
         userId: TEST_USER_A,
         thoughtId: id,
       });
       expect(out.status).toBe("skipped");
-    } finally {
-      if (prior !== undefined) {
-        // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-        process.env["OPENROUTER_API_KEY"] = prior;
-      }
-    }
+    });
   });
 
   test("classifyOnCaptureInternal is a noop when metadata.type is already set", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A, { type: "idea" });
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    process.env["OPENROUTER_API_KEY"] = "fake-key";
+    setEnv("DASHBOARD_WORKER_URL", "https://ob-dash.example.com");
+    setEnv("INTERNAL_API_SECRET", "fake-secret");
     try {
       const out = await t.action(internal.thoughtsAction.classifyOnCaptureInternal, {
         userId: TEST_USER_A,
@@ -228,51 +239,33 @@ describe("thoughtsAction internal actions", () => {
       });
       expect(out.status).toBe("noop");
     } finally {
-      // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-      delete process.env["OPENROUTER_API_KEY"];
+      setEnv("DASHBOARD_WORKER_URL", undefined);
+      setEnv("INTERNAL_API_SECRET", undefined);
     }
   });
 
   test("enrichThoughtInternal skips when env missing", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A);
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const prior = process.env["OPENROUTER_API_KEY"];
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    delete process.env["OPENROUTER_API_KEY"];
-    try {
+    await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
       const out = await t.action(internal.thoughtsAction.enrichThoughtInternal, {
         userId: TEST_USER_A,
         thoughtId: id,
       });
       expect(out.status).toBe("skipped");
-    } finally {
-      if (prior !== undefined) {
-        // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-        process.env["OPENROUTER_API_KEY"] = prior;
-      }
-    }
+    });
   });
 
   test("splitBrainDumpInternal skips when env missing", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A, { content: "dump" });
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const prior = process.env["OPENROUTER_API_KEY"];
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    delete process.env["OPENROUTER_API_KEY"];
-    try {
+    await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
       const out = await t.action(internal.thoughtsAction.splitBrainDumpInternal, {
         userId: TEST_USER_A,
         parentThoughtId: id,
         maxIdeas: 3,
       });
       expect(out.status).toBe("skipped");
-    } finally {
-      if (prior !== undefined) {
-        // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-        process.env["OPENROUTER_API_KEY"] = prior;
-      }
-    }
+    });
   });
 });

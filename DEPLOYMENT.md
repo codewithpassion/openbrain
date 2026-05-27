@@ -78,23 +78,29 @@ bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
 echo "$INTERNAL_API_SECRET" > /tmp/ob-internal-api-secret
 ```
 
-Once the MCP Worker is deployed (step 4), come back and set its URL so
-Convex actions can reach the AI bridge:
+Once the MCP Worker is deployed (step 4) and the dashboard is deployed
+(step 5), come back and set their URLs so Convex actions can reach
+the two Workers AI bridges:
 
 ```bash
+# MCP Worker hosts /internal/ai/run (embeddings) used by
+# internal.aiAction.embedInternal + thoughtsAction.reembedInternal.
 bunx convex env set MCP_WORKER_URL https://<your-mcp-worker>.workers.dev
-# No trailing slash. `internal.aiAction.embedInternal` reads this and
-# falls back to {status: "skipped"} if unset, so deployment ordering
-# (Convex first, then Worker, then this) is safe.
+
+# Dashboard worker hosts /internal/ai/chat (chat completions) used by
+# entitiesAction, thoughtsAction (classify/enrich/split),
+# digestsAction, briefingsAction.
+bunx convex env set DASHBOARD_WORKER_URL https://<your-dashboard>.workers.dev
+# No trailing slashes. Both bridges fall back to {status: "skipped"}
+# when their URL is unset, so deployment ordering (Convex first, then
+# the Workers, then setting these) is safe.
 ```
 
-Optional — only if you want OpenRouter as a fallback LLM for
-classification / brain-dump splitting. The MCP Worker defaults to the
-Workers AI binding for chat-LLM tools, so this is **not** required:
-
-```bash
-bunx convex env set OPENROUTER_API_KEY sk-or-...
-```
+> OpenRouter as an LLM provider is no longer used by Convex actions —
+> classification, enrichment, brain-dump split, entity extraction,
+> digests, and briefings all call Workers AI through the dashboard
+> worker. The MCP Worker still accepts an optional `OPENROUTER_API_KEY`
+> secret as an override for *its* chat-LLM tools (step 4).
 
 ## 3. Cloudflare — provision resources
 
@@ -241,6 +247,7 @@ token-overlap scorer — same Zod contracts, no Cloudflare bill.
 | Smoke fixtures pile up in your store | v1 has no `deleteThought` MCP tool. Fixtures are tagged `source=smoke` and easy to clean from the Convex dashboard. Tracked as a follow-up. |
 | `classify_thought` / `enrich_thought` / `pan_brain_dump` always return the safe-default fallback | The Workers AI binding is missing or the chat model is throttled. Check `bunx wrangler tail` for 5xx from `@cf/meta/llama-3.1-8b-instruct`. Setting `OPENROUTER_API_KEY` switches the LLM to OpenRouter; the Workers AI splitter/extractor stay as the fallback. |
 | `internal.aiAction.embedInternal` always returns `{status:"skipped"}` | `MCP_WORKER_URL` or `INTERNAL_API_SECRET` not set on the Convex deployment. Re-run `bunx convex env set MCP_WORKER_URL …` from step 2. |
+| `entitiesAction.extractFromThoughtInternal`, `classifyOnCaptureInternal`, `enrichThoughtInternal`, `splitBrainDumpInternal`, `digestsAction.*`, or `briefingsAction.*` returns `{status:"skipped"}` | `DASHBOARD_WORKER_URL` or `INTERNAL_API_SECRET` not set on the Convex deployment. Re-run `bunx convex env set DASHBOARD_WORKER_URL …` from step 2. |
 
 ## 10. Rollback
 

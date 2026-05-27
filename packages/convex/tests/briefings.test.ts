@@ -158,12 +158,12 @@ describe("briefings.recordInternal — paired briefing-thought (Phase G)", () =>
 });
 
 describe("briefingsAction.generateForUserInternal", () => {
-  test("skipped when OPENROUTER_API_KEY is unset", async () => {
+  test("skipped when DASHBOARD_WORKER_URL is unset", async () => {
     const t = makeTest();
     // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const prior = process.env["OPENROUTER_API_KEY"];
+    const prior = process.env["DASHBOARD_WORKER_URL"];
     // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    delete process.env["OPENROUTER_API_KEY"];
+    delete process.env["DASHBOARD_WORKER_URL"];
     try {
       const out = await t.action(internal.briefingsAction.generateForUserInternal, {
         userId: TEST_USER_A,
@@ -172,7 +172,7 @@ describe("briefingsAction.generateForUserInternal", () => {
     } finally {
       if (prior !== undefined) {
         // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-        process.env["OPENROUTER_API_KEY"] = prior;
+        process.env["DASHBOARD_WORKER_URL"] = prior;
       }
     }
   });

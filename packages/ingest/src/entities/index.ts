@@ -6,3 +6,4 @@ export type {
   ExtractedRelation,
   ExtractionResult,
 } from "./types";
+export { createWorkersAiEntityExtractor } from "./workers-ai";

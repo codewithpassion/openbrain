@@ -20,6 +20,7 @@ interface ScheduledArgs {
   userId?: string;
   thoughtId?: string;
   vectorizeId?: string;
+  content?: string;
 }
 
 interface ScheduledRow {
@@ -115,6 +116,20 @@ describe("thoughts.deleteThought scheduling", () => {
     expect(queued.length).toBe(1);
     const args = firstArgs(queued[0] as ScheduledRow);
     expect(args.vectorizeId).toBe("custom_vec_id");
+  });
+});
+
+describe("thoughts.createThought scheduling", () => {
+  test("queues entity extraction with the new thought's id and content", async () => {
+    const t = makeTest();
+    const id = await seedThought(t, TEST_USER_A);
+
+    const queued = await listScheduled(t, "entitiesAction:extractFromThoughtInternal");
+    expect(queued.length).toBe(1);
+    const args = firstArgs(queued[0] as ScheduledRow);
+    expect(args.userId).toBe(TEST_USER_A);
+    expect(args.thoughtId).toBe(id);
+    expect(args.content).toBe(makeThought(TEST_USER_A).content);
   });
 });
 

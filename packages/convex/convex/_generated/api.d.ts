@@ -9,6 +9,7 @@
  */
 
 import type * as _lib_audit from "../_lib/audit.js";
+import type * as _lib_chatEnv from "../_lib/chatEnv.js";
 import type * as _lib_identity from "../_lib/identity.js";
 import type * as _lib_jobs from "../_lib/jobs.js";
 import type * as aiAction from "../aiAction.js";
@@ -48,6 +49,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "_lib/audit": typeof _lib_audit;
+  "_lib/chatEnv": typeof _lib_chatEnv;
   "_lib/identity": typeof _lib_identity;
   "_lib/jobs": typeof _lib_jobs;
   aiAction: typeof aiAction;

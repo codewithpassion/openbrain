@@ -13,10 +13,12 @@
  *   - One paired `thoughts` row with `metadata.type === "briefing"`, written
  *     by `briefings.recordInternal` after the briefing lands.
  */
-import { createOpenRouterDigestSummarizer } from "@openbrains/ingest/summarize";
+import { createWorkersAiHttpChatClient } from "@openbrains/ingest/chat";
+import { createWorkersAiDigestSummarizer } from "@openbrains/ingest/summarize";
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { action, internalAction } from "./_generated/server.js";
+import { readChatBridgeEnv } from "./_lib/chatEnv.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -55,18 +57,17 @@ export const generateForUserInternal = internalAction({
     const windowEndMs = args.windowEndMs ?? startedAt;
     const windowStartMs = windowEndMs - DAY_MS;
 
-    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
-    const apiKey = process.env["OPENROUTER_API_KEY"];
-    if (apiKey === undefined || apiKey === "") {
+    const chatEnv = readChatBridgeEnv();
+    if ("skipped" in chatEnv) {
       await ctx.runMutation(internal.jobs.recordRunInternal, {
         name: "briefings.daily",
         userId: args.userId,
         status: "skipped",
         startedAt,
         finishedAt: Date.now(),
-        note: "OPENROUTER_API_KEY not set",
+        note: chatEnv.skipped,
       });
-      return { status: "skipped", reason: "OPENROUTER_API_KEY not set" };
+      return { status: "skipped", reason: chatEnv.skipped };
     }
 
     let collected: CollectResult;
@@ -93,7 +94,11 @@ export const generateForUserInternal = internalAction({
       userId: args.userId,
     })) as WorldModel | null;
 
-    const summarizer = createOpenRouterDigestSummarizer({ apiKey });
+    const ai = createWorkersAiHttpChatClient({
+      baseUrl: chatEnv.baseUrl,
+      internalSecret: chatEnv.secret,
+    });
+    const summarizer = createWorkersAiDigestSummarizer({ ai });
     const summary = await summarizer.summarize(summarizeInputs(collected.thoughts, worldModel));
 
     const sections = deriveSections(collected.thoughts);
