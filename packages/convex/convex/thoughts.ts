@@ -237,6 +237,15 @@ async function updateContentCore(
     userId,
     thoughtId: args.id,
   });
+  // Re-extract entities from the new content. The action first wipes any
+  // stale mentions / relation-evidence for this thought via
+  // `entities.clearForThoughtInternal`, then upserts what the LLM finds in
+  // the new content. Best-effort like the reembed.
+  await ctx.scheduler.runAfter(0, internal.entitiesAction.extractFromThoughtInternal, {
+    userId,
+    thoughtId: args.id,
+    content: args.content,
+  });
 }
 
 /**

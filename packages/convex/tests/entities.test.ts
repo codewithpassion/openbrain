@@ -143,6 +143,118 @@ describe("entities.relateInternal", () => {
   });
 });
 
+describe("entities.clearForThoughtInternal", () => {
+  test("deletes mentions for the target thought and leaves siblings alone", async () => {
+    const t = makeTest();
+    const target = await seedThought(t, TEST_USER_A, "target-fp");
+    const other = await seedThought(t, TEST_USER_A, "other-fp");
+    const entityId = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Cloudflare", kind: "org", aliases: [] },
+    });
+    await t.mutation(internal.entities.mentionInternal, {
+      userId: TEST_USER_A,
+      entityId,
+      thoughtId: target,
+    });
+    await t.mutation(internal.entities.mentionInternal, {
+      userId: TEST_USER_A,
+      entityId,
+      thoughtId: other,
+    });
+
+    await t.mutation(internal.entities.clearForThoughtInternal, {
+      userId: TEST_USER_A,
+      thoughtId: target,
+    });
+
+    const mentions = await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.entities.mentionsForEntity, { entityId });
+    expect(mentions).toHaveLength(1);
+    expect(mentions[0]?.thoughtId).toBe(other);
+  });
+
+  test("prunes the thoughtId from relation evidence and keeps the relation alive", async () => {
+    const t = makeTest();
+    const target = await seedThought(t, TEST_USER_A, "target-fp");
+    const other = await seedThought(t, TEST_USER_A, "other-fp");
+    const a = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Dom", kind: "person", aliases: [] },
+    });
+    const b = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Cloudflare", kind: "org", aliases: [] },
+    });
+    await t.mutation(internal.entities.relateInternal, {
+      userId: TEST_USER_A,
+      relation: {
+        fromEntityId: a,
+        toEntityId: b,
+        kind: "works_at",
+        evidenceThoughtIds: [target, other],
+        confidence: 0.8,
+      },
+    });
+
+    await t.mutation(internal.entities.clearForThoughtInternal, {
+      userId: TEST_USER_A,
+      thoughtId: target,
+    });
+
+    const { outgoing } = await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.entities.relationsForEntity, { entityId: a });
+    expect(outgoing).toHaveLength(1);
+    expect(outgoing[0]?.evidenceThoughtIds).toEqual([other]);
+  });
+
+  test("deletes a relation when pruning leaves its evidence empty", async () => {
+    const t = makeTest();
+    const target = await seedThought(t, TEST_USER_A, "target-fp");
+    const a = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Dom", kind: "person", aliases: [] },
+    });
+    const b = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Cloudflare", kind: "org", aliases: [] },
+    });
+    await t.mutation(internal.entities.relateInternal, {
+      userId: TEST_USER_A,
+      relation: {
+        fromEntityId: a,
+        toEntityId: b,
+        kind: "works_at",
+        evidenceThoughtIds: [target],
+        confidence: 0.7,
+      },
+    });
+
+    await t.mutation(internal.entities.clearForThoughtInternal, {
+      userId: TEST_USER_A,
+      thoughtId: target,
+    });
+
+    const { outgoing } = await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.entities.relationsForEntity, { entityId: a });
+    expect(outgoing).toHaveLength(0);
+  });
+
+  test("refuses cross-tenant thought ids", async () => {
+    const t = makeTest();
+    const target = await seedThought(t, TEST_USER_A, "target-fp");
+    await expect(
+      t.mutation(internal.entities.clearForThoughtInternal, {
+        userId: TEST_USER_B,
+        thoughtId: target,
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
+  });
+});
+
 describe("entities.listForUser", () => {
   test("rejects unauthenticated callers", async () => {
     const t = makeTest();

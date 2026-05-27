@@ -87,6 +87,29 @@ describe("thoughts.updateContent scheduling", () => {
     expect(args.userId).toBe(TEST_USER_A);
     expect(args.thoughtId).toBe(id);
   });
+
+  test("queues entity re-extraction with the new content after a content edit", async () => {
+    const t = makeTest();
+    const id = await seedThought(t, TEST_USER_A);
+    const newContent = "edited content mentions Cloudflare";
+    const fingerprint = await sha256Hex(newContent);
+
+    await t.withIdentity({ subject: TEST_USER_A }).mutation(api.thoughts.updateContent, {
+      id,
+      content: newContent,
+      fingerprint,
+      metadata: { topics: [], people: [], action_items: [], dates_mentioned: [] },
+    });
+
+    // Seed scheduled one extraction with the original content; the edit must
+    // schedule a second with the new content.
+    const queued = await listScheduled(t, "entitiesAction:extractFromThoughtInternal");
+    expect(queued.length).toBe(2);
+    const editArgs = queued.map((q) => firstArgs(q)).find((a) => a.content === newContent);
+    expect(editArgs).toBeDefined();
+    expect(editArgs?.userId).toBe(TEST_USER_A);
+    expect(editArgs?.thoughtId).toBe(id);
+  });
 });
 
 describe("thoughts.deleteThought scheduling", () => {

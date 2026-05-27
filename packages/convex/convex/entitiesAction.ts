@@ -17,6 +17,14 @@ export const extractFromThoughtInternal = internalAction({
     if ("skipped" in env) {
       return { status: "skipped", reason: env.skipped };
     }
+    // Wipe any prior mentions / relation evidence for this thought before
+    // upserting from the new content, so editing a thought doesn't leave
+    // stale entries behind. Relations whose evidence becomes empty are
+    // deleted outright (see `entities.clearForThoughtInternal`).
+    await ctx.runMutation(internal.entities.clearForThoughtInternal, {
+      userId: args.userId,
+      thoughtId: args.thoughtId,
+    });
     const ai = createWorkersAiHttpChatClient({
       baseUrl: env.baseUrl,
       internalSecret: env.secret,

@@ -345,3 +345,49 @@ export const relateInternal = internalMutation({
     return match._id;
   },
 });
+
+/**
+ * Drop every trace of a thought from the entity sidecars before a re-extract:
+ * deletes its `entity_mentions` rows and prunes its id out of every
+ * `entity_relations.evidenceThoughtIds`. Relations whose evidence becomes
+ * empty are deleted outright — they're no longer supported by any thought.
+ *
+ * Called by `entitiesAction.extractFromThoughtInternal` on every invocation
+ * (re-extract on edit) so stale mentions/relations don't accumulate.
+ */
+export const clearForThoughtInternal = internalMutation({
+  args: { userId: v.string(), thoughtId: v.id("thoughts") },
+  handler: async (ctx, args): Promise<void> => {
+    const thought = await ctx.db.get(args.thoughtId);
+    if (thought === null || thought.userId !== args.userId) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Thought not found" });
+    }
+    const mentions = await ctx.db
+      .query("entity_mentions")
+      .withIndex("by_user_thought", (q) =>
+        q.eq("userId", args.userId).eq("thoughtId", args.thoughtId),
+      )
+      .collect();
+    for (const m of mentions) {
+      await ctx.db.delete(m._id);
+    }
+    // No native "array-contains" index; scan the user's relations and prune
+    // in JS. Per-user volumes here are small (low thousands at most), so a
+    // full scan beats maintaining a parallel inverted index.
+    const relations = await ctx.db
+      .query("entity_relations")
+      .withIndex("by_user_from", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const r of relations) {
+      if (!r.evidenceThoughtIds.includes(args.thoughtId)) {
+        continue;
+      }
+      const pruned = r.evidenceThoughtIds.filter((id) => id !== args.thoughtId);
+      if (pruned.length === 0) {
+        await ctx.db.delete(r._id);
+      } else {
+        await ctx.db.patch(r._id, { evidenceThoughtIds: pruned, updatedAt: Date.now() });
+      }
+    }
+  },
+});
