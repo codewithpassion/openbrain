@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useActiveScope } from "../lib/active-scope";
 import { validateCapture } from "./quick-capture-model";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 
@@ -59,26 +59,27 @@ export function QuickCapture() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Capture a thought</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Card className="overflow-hidden border-foreground/10 shadow-sm">
+      <CardContent className="pt-6">
         <form onSubmit={onSubmit} className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="capture">Thought</Label>
-            <Textarea
-              id="capture"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="What's on your mind?"
-              rows={4}
-              disabled={submitting}
-            />
-          </div>
+          <Label htmlFor="capture" className="sr-only">
+            Thought
+          </Label>
+          <Textarea
+            id="capture"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Capture a thought, idea, decision, or question…"
+            rows={4}
+            disabled={submitting}
+            className="resize-none border-0 bg-transparent px-0 text-base leading-relaxed shadow-none focus-visible:ring-0"
+          />
           {error === null ? null : <p className="text-destructive text-sm">{error}</p>}
-          <div className="flex justify-end">
-            <Button type="submit" disabled={submitting}>
+          <div className="flex items-center justify-between border-t pt-3">
+            <p className="text-muted-foreground text-xs">
+              Auto-embedded and searchable across every connected client.
+            </p>
+            <Button type="submit" disabled={submitting} size="sm">
               {submitting ? "Saving…" : "Capture"}
             </Button>
           </div>

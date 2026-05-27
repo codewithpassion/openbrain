@@ -29,12 +29,12 @@ export function ProjectSwitcher() {
   }
 
   return (
-    <label className="flex items-center gap-2 text-muted-foreground text-xs">
+    <label className="flex items-center text-sm">
       <span className="sr-only">Active project</span>
       <select
         value={scope ?? ""}
         onChange={onChange}
-        className="rounded border bg-background px-2 py-1 text-foreground"
+        className="h-9 rounded-md border border-input bg-background px-2.5 pr-7 font-medium text-foreground text-sm transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
         aria-label="Active project"
       >
         <option value="">All projects</option>

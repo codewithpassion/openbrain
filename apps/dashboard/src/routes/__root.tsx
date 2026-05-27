@@ -1,7 +1,12 @@
 import { ClerkProvider, Show, UserButton, useAuth } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { Brain, Menu } from "lucide-react";
+import { useState } from "react";
+import { AppSidebar } from "../components/app-sidebar";
 import { ProjectSwitcher } from "../components/project-switcher";
+import { Button } from "../components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { getClientEnv } from "../env";
 import { getConvexClient } from "../lib/convex";
 import appCss from "../styles.css?url";
@@ -26,7 +31,7 @@ function RootDocument() {
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background text-foreground">
+      <body className="min-h-screen bg-background text-foreground antialiased">
         <ClerkProvider publishableKey={VITE_CLERK_PUBLISHABLE_KEY}>
           <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
             <Shell />
@@ -40,78 +45,90 @@ function RootDocument() {
 
 function Shell() {
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-4">
-        <nav className="flex items-center gap-4 font-medium text-sm">
-          <Link to="/" className="font-semibold text-base">
-            OpenBrains
+    <>
+      <Show when="signed-in">
+        <AuthedShell />
+      </Show>
+      <Show when="signed-out">
+        <PublicShell />
+      </Show>
+    </>
+  );
+}
+
+function AuthedShell() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  return (
+    <div className="flex min-h-screen">
+      <aside className="hidden w-64 shrink-0 border-r bg-muted/30 lg:flex lg:flex-col">
+        <AppSidebar />
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                aria-label="Open navigation"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0">
+              <AppSidebar onNavigate={() => setMobileOpen(false)} />
+            </SheetContent>
+          </Sheet>
+          <Link to="/" className="flex items-center gap-2 lg:hidden">
+            <span
+              aria-hidden
+              className="grid h-7 w-7 place-items-center rounded-md bg-foreground text-background"
+            >
+              <Brain className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+            <span className="font-semibold text-sm">OpenBrains</span>
           </Link>
-          <Show when="signed-in">
-            <Link to="/" className="text-muted-foreground hover:text-foreground">
-              Capture
-            </Link>
-            <Link to="/thoughts" className="text-muted-foreground hover:text-foreground">
-              Thoughts
-            </Link>
-            <Link to="/search" className="text-muted-foreground hover:text-foreground">
-              Search
-            </Link>
-            <Link to="/stats" className="text-muted-foreground hover:text-foreground">
-              Stats
-            </Link>
-            <Link to="/inspector" className="text-muted-foreground hover:text-foreground">
-              Inspector
-            </Link>
-            <Link to="/entities" className="text-muted-foreground hover:text-foreground">
-              Entities
-            </Link>
-            <Link to="/crm" className="text-muted-foreground hover:text-foreground">
-              CRM
-            </Link>
-            <Link to="/briefings" className="text-muted-foreground hover:text-foreground">
-              Briefings
-            </Link>
-            <Link to="/graph" className="text-muted-foreground hover:text-foreground">
-              Graph
-            </Link>
-            <Link to="/digests" className="text-muted-foreground hover:text-foreground">
-              Digests
-            </Link>
-            <Link to="/ingest" className="text-muted-foreground hover:text-foreground">
-              Ingest
-            </Link>
-            <Link to="/quality" className="text-muted-foreground hover:text-foreground">
-              Quality
-            </Link>
-            <Link to="/jobs" className="text-muted-foreground hover:text-foreground">
-              Jobs
-            </Link>
-            <Link to="/audit" className="text-muted-foreground hover:text-foreground">
-              Audit
-            </Link>
-            <Link to="/api-keys" className="text-muted-foreground hover:text-foreground">
-              API Keys
-            </Link>
-          </Show>
-        </nav>
-        <div className="flex items-center gap-3">
-          <Show when="signed-in">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <ProjectSwitcher />
             <UserButton />
-          </Show>
-          <Show when="signed-out">
-            <Link
-              to="/sign-in/$"
-              params={{ _splat: "" }}
-              className="font-medium text-sm underline-offset-4 hover:underline"
-            >
-              Sign in
-            </Link>
-          </Show>
-        </div>
+          </div>
+        </header>
+        <main className="flex-1 px-4 py-6 md:px-8 md:py-10">
+          <div className="mx-auto w-full max-w-6xl">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function PublicShell() {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <header className="flex h-14 items-center justify-between border-b px-4 md:px-6">
+        <Link to="/" className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="grid h-8 w-8 place-items-center rounded-md bg-foreground text-background"
+          >
+            <Brain className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+          <span className="font-semibold text-base">OpenBrains</span>
+        </Link>
+        <Link
+          to="/sign-in/$"
+          params={{ _splat: "" }}
+          className="font-medium text-sm underline-offset-4 hover:underline"
+        >
+          Sign in
+        </Link>
       </header>
-      <main className="flex-1 px-6 py-8">
-        <Outlet />
+      <main className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className="mx-auto w-full max-w-3xl">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
