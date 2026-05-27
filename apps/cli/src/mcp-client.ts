@@ -2,17 +2,36 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FetchLike as SdkFetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
+  type ApplyClassificationInput,
+  type ApplyEnrichmentInput,
+  type ApplySplitInput,
+  applyClassificationOutputSchema,
+  applyEnrichmentOutputSchema,
+  applySplitOutputSchema,
   type CaptureThoughtInput,
+  type ClassifyThoughtInput,
+  type CreateProjectInput,
   captureThoughtOutputSchema,
+  classifyThoughtOutputSchema,
+  createProjectOutputSchema,
+  type EnrichThoughtInput,
+  enrichThoughtOutputSchema,
   type ListThoughtsInput,
+  listProjectsOutputSchema,
   listThoughtsOutputSchema,
   type MemoryRecallInput,
   type MemoryWritebackInput,
   memoryRecallOutputSchema,
   memoryWritebackOutputSchema,
+  type PanBrainDumpInput,
+  panBrainDumpOutputSchema,
+  type RelatedThoughtsInput,
+  relatedThoughtsOutputSchema,
   type SearchThoughtsInput,
   searchThoughtsOutputSchema,
   thoughtStatsOutputSchema,
+  type UpdateThoughtInput,
+  updateThoughtOutputSchema,
 } from "@openbrains/shared";
 import type { Credentials } from "./auth/credentials-store";
 import { writeCredentials } from "./auth/credentials-store";
@@ -206,6 +225,74 @@ export class ObMcpClient {
     const result = await this.call("memory_writeback", input);
     return this.parseStructured(result, memoryWritebackOutputSchema, "memory_writeback");
   }
+
+  public async classifyThought(
+    input: ClassifyThoughtInput,
+  ): Promise<ReturnType<typeof classifyThoughtOutputSchema.parse>> {
+    const result = await this.call("classify_thought", input);
+    return this.parseStructured(result, classifyThoughtOutputSchema, "classify_thought");
+  }
+
+  public async enrichThought(
+    input: EnrichThoughtInput,
+  ): Promise<ReturnType<typeof enrichThoughtOutputSchema.parse>> {
+    const result = await this.call("enrich_thought", input);
+    return this.parseStructured(result, enrichThoughtOutputSchema, "enrich_thought");
+  }
+
+  public async panBrainDump(
+    input: PanBrainDumpInput,
+  ): Promise<ReturnType<typeof panBrainDumpOutputSchema.parse>> {
+    const result = await this.call("pan_brain_dump", input);
+    return this.parseStructured(result, panBrainDumpOutputSchema, "pan_brain_dump");
+  }
+
+  public async relatedThoughts(
+    input: RelatedThoughtsInput,
+  ): Promise<ReturnType<typeof relatedThoughtsOutputSchema.parse>> {
+    const result = await this.call("related_thoughts", input);
+    return this.parseStructured(result, relatedThoughtsOutputSchema, "related_thoughts");
+  }
+
+  public async updateThought(
+    input: UpdateThoughtInput,
+  ): Promise<ReturnType<typeof updateThoughtOutputSchema.parse>> {
+    const result = await this.call("update_thought", input);
+    return this.parseStructured(result, updateThoughtOutputSchema, "update_thought");
+  }
+
+  public async applyClassification(
+    input: ApplyClassificationInput,
+  ): Promise<ReturnType<typeof applyClassificationOutputSchema.parse>> {
+    const result = await this.call("classify_thought_apply", input);
+    return this.parseStructured(result, applyClassificationOutputSchema, "classify_thought_apply");
+  }
+
+  public async applyEnrichment(
+    input: ApplyEnrichmentInput,
+  ): Promise<ReturnType<typeof applyEnrichmentOutputSchema.parse>> {
+    const result = await this.call("enrich_thought_apply", input);
+    return this.parseStructured(result, applyEnrichmentOutputSchema, "enrich_thought_apply");
+  }
+
+  public async applySplit(
+    input: ApplySplitInput,
+  ): Promise<ReturnType<typeof applySplitOutputSchema.parse>> {
+    const result = await this.call("pan_brain_dump_apply", input);
+    return this.parseStructured(result, applySplitOutputSchema, "pan_brain_dump_apply");
+  }
+
+  public async listProjects(): Promise<ReturnType<typeof listProjectsOutputSchema.parse>> {
+    const result = await this.call("list_projects", {});
+    return this.parseStructured(result, listProjectsOutputSchema, "list_projects");
+  }
+
+  public async createProject(
+    input: CreateProjectInput,
+  ): Promise<ReturnType<typeof createProjectOutputSchema.parse>> {
+    const result = await this.call("create_project", input);
+    return this.parseStructured(result, createProjectOutputSchema, "create_project");
+  }
 }
 
 export interface McpClientLike {
@@ -215,5 +302,15 @@ export interface McpClientLike {
   thoughtStats: ObMcpClient["thoughtStats"];
   memoryRecall: ObMcpClient["memoryRecall"];
   memoryWriteback: ObMcpClient["memoryWriteback"];
+  classifyThought: ObMcpClient["classifyThought"];
+  enrichThought: ObMcpClient["enrichThought"];
+  panBrainDump: ObMcpClient["panBrainDump"];
+  relatedThoughts: ObMcpClient["relatedThoughts"];
+  updateThought: ObMcpClient["updateThought"];
+  applyClassification: ObMcpClient["applyClassification"];
+  applyEnrichment: ObMcpClient["applyEnrichment"];
+  applySplit: ObMcpClient["applySplit"];
+  listProjects: ObMcpClient["listProjects"];
+  createProject: ObMcpClient["createProject"];
   close: ObMcpClient["close"];
 }

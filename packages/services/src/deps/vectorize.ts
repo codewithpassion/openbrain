@@ -30,19 +30,25 @@ export interface VectorizeBinding {
  * Narrow Vectorize client our services call. Namespace is always `userId` —
  * this is the primary tenant-isolation gate (ARCHITECTURE.md §"Vectorize index").
  * Tests assert the namespace is wired through on every call.
+ *
+ * `scope` (Phase H) is carried in vector metadata so semantic search can push
+ * the filter into Vectorize once the operator has created the metadata index:
+ *   `wrangler vectorize create-metadata-index thoughts-v1 --property-name=scope --type=string`
+ * Callers still re-check `scope` against the Convex row — Vectorize metadata
+ * can lag writes, so the Convex value is the correctness gate.
  */
 export interface VectorizeClient {
   upsert(input: {
     id: string;
     userId: string;
     values: readonly number[];
-    metadata: { type?: string; source: string };
+    metadata: { type?: string; source: string; scope?: string };
   }): Promise<void>;
   query(input: {
     userId: string;
     values: readonly number[];
     topK: number;
-    metadata?: { type?: string; source?: string };
+    metadata?: { type?: string; source?: string; scope?: string };
   }): Promise<readonly { id: string; score: number }[]>;
   delete(input: { id: string }): Promise<void>;
 }
@@ -52,11 +58,14 @@ export function createVectorizeClient(binding: VectorizeBinding): VectorizeClien
     id: string;
     userId: string;
     values: readonly number[];
-    metadata: { type?: string; source: string };
+    metadata: { type?: string; source: string; scope?: string };
   }): Promise<void> {
     const meta: Record<string, string> = { source: input.metadata.source };
     if (input.metadata.type !== undefined) {
       meta["type"] = input.metadata.type;
+    }
+    if (input.metadata.scope !== undefined) {
+      meta["scope"] = input.metadata.scope;
     }
     await binding.upsert([
       {
@@ -72,7 +81,7 @@ export function createVectorizeClient(binding: VectorizeBinding): VectorizeClien
     userId: string;
     values: readonly number[];
     topK: number;
-    metadata?: { type?: string; source?: string };
+    metadata?: { type?: string; source?: string; scope?: string };
   }): Promise<readonly { id: string; score: number }[]> {
     const filter: Record<string, string> = {};
     if (input.metadata?.type !== undefined) {
@@ -80,6 +89,9 @@ export function createVectorizeClient(binding: VectorizeBinding): VectorizeClien
     }
     if (input.metadata?.source !== undefined) {
       filter["source"] = input.metadata.source;
+    }
+    if (input.metadata?.scope !== undefined) {
+      filter["scope"] = input.metadata.scope;
     }
     const opts: {
       topK: number;

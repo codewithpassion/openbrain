@@ -22,19 +22,29 @@ async function runSearch(
   userId: string,
   input: SearchThoughtsInput,
 ): Promise<SearchThoughtsOutput> {
-  const { query, limit, threshold, type, source } = input;
+  const { query, limit, threshold, type, source, scope } = input;
   const embedding = await deps.embeddings.embed(query);
-  const filter: { type?: string; source?: string } = {};
+  const filter: { type?: string; source?: string; scope?: string } = {};
   if (type !== undefined) {
     filter.type = type;
   }
   if (source !== undefined) {
     filter.source = source;
   }
+  // Only push `scope` into Vectorize when the operator has flipped the flag
+  // (i.e. the metadata index exists in prod). When the flag is off we
+  // over-fetch and post-filter via the Convex row, which is the source of
+  // truth for scope. The Convex-row check below runs in both modes — it also
+  // covers Vectorize-metadata-index *lag*, not just absence.
+  const scopeReady = deps.featureFlags?.scopeIndexReady === true;
+  if (scope !== undefined && scopeReady) {
+    filter.scope = scope;
+  }
+  const topK = scope === undefined || scopeReady ? limit : Math.min(100, limit * 4);
   const matches = await deps.vectorize.query({
     userId,
     values: embedding.vector,
-    topK: limit,
+    topK,
     ...(Object.keys(filter).length > 0 ? { metadata: filter } : {}),
   });
   const filtered = matches.filter((m) => m.score >= threshold);
@@ -52,6 +62,9 @@ async function runSearch(
       if (row === undefined) {
         return null;
       }
+      if (scope !== undefined && row.scope !== scope) {
+        return null;
+      }
       return {
         id: ThoughtId.parse(row._id),
         score: m.score,
@@ -60,6 +73,7 @@ async function runSearch(
         createdAt: row.createdAt,
       };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .slice(0, limit);
   return { results };
 }

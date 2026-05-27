@@ -28,6 +28,8 @@ import { Route as ThoughtsIdRouteImport } from './routes/thoughts.$id'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as EntitiesIdRouteImport } from './routes/entities.$id'
+import { Route as CrmPersonIdRouteImport } from './routes/crm.$personId'
+import { Route as CrmOrgIdRouteImport } from './routes/crm.$orgId'
 
 const ThoughtsRoute = ThoughtsRouteImport.update({
   id: '/thoughts',
@@ -124,13 +126,23 @@ const EntitiesIdRoute = EntitiesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => EntitiesRoute,
 } as any)
+const CrmPersonIdRoute = CrmPersonIdRouteImport.update({
+  id: '/$personId',
+  path: '/$personId',
+  getParentRoute: () => CrmRoute,
+} as any)
+const CrmOrgIdRoute = CrmOrgIdRouteImport.update({
+  id: '/$orgId',
+  path: '/$orgId',
+  getParentRoute: () => CrmRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
   '/audit': typeof AuditRoute
   '/briefings': typeof BriefingsRoute
-  '/crm': typeof CrmRoute
+  '/crm': typeof CrmRouteWithChildren
   '/digests': typeof DigestsRoute
   '/entities': typeof EntitiesRouteWithChildren
   '/graph': typeof GraphRoute
@@ -141,6 +153,8 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRouteWithChildren
+  '/crm/$orgId': typeof CrmOrgIdRoute
+  '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -151,7 +165,7 @@ export interface FileRoutesByTo {
   '/api-keys': typeof ApiKeysRoute
   '/audit': typeof AuditRoute
   '/briefings': typeof BriefingsRoute
-  '/crm': typeof CrmRoute
+  '/crm': typeof CrmRouteWithChildren
   '/digests': typeof DigestsRoute
   '/entities': typeof EntitiesRouteWithChildren
   '/graph': typeof GraphRoute
@@ -162,6 +176,8 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRouteWithChildren
+  '/crm/$orgId': typeof CrmOrgIdRoute
+  '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -173,7 +189,7 @@ export interface FileRoutesById {
   '/api-keys': typeof ApiKeysRoute
   '/audit': typeof AuditRoute
   '/briefings': typeof BriefingsRoute
-  '/crm': typeof CrmRoute
+  '/crm': typeof CrmRouteWithChildren
   '/digests': typeof DigestsRoute
   '/entities': typeof EntitiesRouteWithChildren
   '/graph': typeof GraphRoute
@@ -184,6 +200,8 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/stats': typeof StatsRoute
   '/thoughts': typeof ThoughtsRouteWithChildren
+  '/crm/$orgId': typeof CrmOrgIdRoute
+  '/crm/$personId': typeof CrmPersonIdRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -207,6 +225,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/stats'
     | '/thoughts'
+    | '/crm/$orgId'
+    | '/crm/$personId'
     | '/entities/$id'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -228,6 +248,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/stats'
     | '/thoughts'
+    | '/crm/$orgId'
+    | '/crm/$personId'
     | '/entities/$id'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -249,6 +271,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/stats'
     | '/thoughts'
+    | '/crm/$orgId'
+    | '/crm/$personId'
     | '/entities/$id'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -260,7 +284,7 @@ export interface RootRouteChildren {
   ApiKeysRoute: typeof ApiKeysRoute
   AuditRoute: typeof AuditRoute
   BriefingsRoute: typeof BriefingsRoute
-  CrmRoute: typeof CrmRoute
+  CrmRoute: typeof CrmRouteWithChildren
   DigestsRoute: typeof DigestsRoute
   EntitiesRoute: typeof EntitiesRouteWithChildren
   GraphRoute: typeof GraphRoute
@@ -410,8 +434,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EntitiesIdRouteImport
       parentRoute: typeof EntitiesRoute
     }
+    '/crm/$personId': {
+      id: '/crm/$personId'
+      path: '/$personId'
+      fullPath: '/crm/$personId'
+      preLoaderRoute: typeof CrmPersonIdRouteImport
+      parentRoute: typeof CrmRoute
+    }
+    '/crm/$orgId': {
+      id: '/crm/$orgId'
+      path: '/$orgId'
+      fullPath: '/crm/$orgId'
+      preLoaderRoute: typeof CrmOrgIdRouteImport
+      parentRoute: typeof CrmRoute
+    }
   }
 }
+
+interface CrmRouteChildren {
+  CrmOrgIdRoute: typeof CrmOrgIdRoute
+  CrmPersonIdRoute: typeof CrmPersonIdRoute
+}
+
+const CrmRouteChildren: CrmRouteChildren = {
+  CrmOrgIdRoute: CrmOrgIdRoute,
+  CrmPersonIdRoute: CrmPersonIdRoute,
+}
+
+const CrmRouteWithChildren = CrmRoute._addFileChildren(CrmRouteChildren)
 
 interface EntitiesRouteChildren {
   EntitiesIdRoute: typeof EntitiesIdRoute
@@ -442,7 +492,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiKeysRoute: ApiKeysRoute,
   AuditRoute: AuditRoute,
   BriefingsRoute: BriefingsRoute,
-  CrmRoute: CrmRoute,
+  CrmRoute: CrmRouteWithChildren,
   DigestsRoute: DigestsRoute,
   EntitiesRoute: EntitiesRouteWithChildren,
   GraphRoute: GraphRoute,

@@ -21,6 +21,7 @@ export const ConvexThoughtRowSchema = z.object({
   userId: z.string().min(1),
   content: z.string().min(1),
   source: z.string().min(1),
+  scope: z.string().optional(),
   vectorizeId: z.string().optional(),
   embeddingModel: z.string().min(1),
   embeddingDims: z.number().int().positive(),
@@ -169,4 +170,28 @@ export const EntityGetResponseSchema = z.object({
 export const EntityRelationsResponseSchema = z.object({
   outgoing: z.array(ConvexEntityRelationRowSchema),
   incoming: z.array(ConvexEntityRelationRowSchema),
+});
+
+/* --------------------------------------------------------------------------
+ * Project (scope namespace) wire schemas
+ * ------------------------------------------------------------------------ */
+
+export const ConvexProjectRowSchema = z.object({
+  _id: z.string().min(1),
+  _creationTime: z.number().optional(),
+  userId: z.string().min(1),
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  createdAt: z.number().positive(),
+});
+export type ConvexProjectRow = z.infer<typeof ConvexProjectRowSchema>;
+
+export const ProjectListResponseSchema = z.object({
+  rows: z.array(ConvexProjectRowSchema),
+});
+
+export const ProjectCreateResponseSchema = z.object({
+  id: z.string().min(1),
+  slug: z.string().min(1),
 });

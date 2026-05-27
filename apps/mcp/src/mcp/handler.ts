@@ -14,6 +14,7 @@ import { createEmbedder } from "../deps/embeddings";
 import { createVectorizeClient } from "../deps/vectorize";
 import type { WorkerEnv } from "../env";
 import { buildServer } from "./server";
+import { createSessionScopeStore } from "./session-scope-store";
 
 /**
  * The Cloudflare `AI` binding satisfies both the embedding interface and the
@@ -78,6 +79,7 @@ export const mcpApiHandler: ApiHandler = {
           }),
         })
       : createWorkersAiBrainDumpSplitter({ ai, fallback: createFakeBrainDumpSplitter() });
+    const scopeIndexReady = env.SCOPE_INDEX_READY === "1" || env.SCOPE_INDEX_READY === "true";
     const deps = {
       convex: createConvexClient({
         convexUrl: env.CONVEX_URL,
@@ -87,6 +89,8 @@ export const mcpApiHandler: ApiHandler = {
       embeddings: createEmbedder(env.AI, opts),
       metadata,
       splitter,
+      sessionScope: createSessionScopeStore(env.OAUTH_KV),
+      featureFlags: { scopeIndexReady },
     };
     const server = buildServer({ deps, auth });
     try {

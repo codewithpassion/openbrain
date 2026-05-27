@@ -50,20 +50,23 @@ function Body() {
 
       <EntityListCard
         title="People"
+        kind="person"
         rows={people}
         emptyText="No people yet. The entity extractor will populate this as you capture thoughts that mention names."
       />
-      <EntityListCard title="Orgs" rows={orgs} emptyText="No orgs yet." />
+      <EntityListCard title="Orgs" kind="org" rows={orgs} emptyText="No orgs yet." />
     </div>
   );
 }
 
 function EntityListCard({
   title,
+  kind,
   rows,
   emptyText,
 }: {
   readonly title: string;
+  readonly kind: "person" | "org";
   readonly rows: EntityDoc[] | undefined;
   readonly emptyText: string;
 }) {
@@ -81,13 +84,23 @@ function EntityListCard({
           <ul className="space-y-2 text-sm">
             {rows.map((r) => (
               <li key={r._id} className="flex items-baseline justify-between gap-3">
-                <Link
-                  to="/entities/$id"
-                  params={{ id: r._id }}
-                  className="font-medium underline-offset-4 hover:underline"
-                >
-                  {r.canonicalName}
-                </Link>
+                {kind === "person" ? (
+                  <Link
+                    to="/crm/$personId"
+                    params={{ personId: r._id }}
+                    className="font-medium underline-offset-4 hover:underline"
+                  >
+                    {r.canonicalName}
+                  </Link>
+                ) : (
+                  <Link
+                    to="/crm/$orgId"
+                    params={{ orgId: r._id }}
+                    className="font-medium underline-offset-4 hover:underline"
+                  >
+                    {r.canonicalName}
+                  </Link>
+                )}
                 <span className="text-muted-foreground text-xs">
                   updated {formatRelativeTime(r.updatedAt)}
                 </span>

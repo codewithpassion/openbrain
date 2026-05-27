@@ -1,4 +1,5 @@
 import { memoryRecall, ServiceAuthError, ServiceInputError } from "@openbrains/services";
+import { withSessionDefaultScope } from "../session-scope-store";
 import { err, ok, type ToolEnvelope, type ToolTextResult } from "./types";
 
 export async function memoryRecallHandler(
@@ -6,7 +7,12 @@ export async function memoryRecallHandler(
   envelope: ToolEnvelope,
 ): Promise<ToolTextResult> {
   try {
-    const out = await memoryRecall(envelope.deps, envelope.auth.userId, rawInput);
+    const withDefault = await withSessionDefaultScope(
+      rawInput,
+      envelope.deps.sessionScope,
+      envelope.auth.userId,
+    );
+    const out = await memoryRecall(envelope.deps, envelope.auth.userId, withDefault);
     return ok(out);
   } catch (e) {
     if (e instanceof ServiceAuthError || e instanceof ServiceInputError) {

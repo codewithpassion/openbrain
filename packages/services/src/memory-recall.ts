@@ -14,12 +14,20 @@ export async function memoryRecall(
 ): Promise<MemoryRecallOutput> {
   assertUserId(userId);
   const input: MemoryRecallInput = parseInput(memoryRecallInputSchema, rawInput);
-  const { query, limit, threshold } = input;
+  const { query, limit, threshold, scope } = input;
   const embedding = await deps.embeddings.embed(query);
+  // Push `scope` to Vectorize only when the operator has flipped the
+  // `scopeIndexReady` flag (i.e. the metadata index exists in prod). Without
+  // the index, Vectorize 400s on the filter, so we over-fetch + post-filter
+  // via the Convex row instead. See deps/index.ts for the flag rationale.
+  const scopeReady = deps.featureFlags?.scopeIndexReady === true;
+  const pushScope = scope !== undefined && scopeReady;
+  const topK = scope === undefined || scopeReady ? limit : Math.min(100, limit * 4);
   const matches = await deps.vectorize.query({
     userId,
     values: embedding.vector,
-    topK: limit,
+    topK,
+    ...(pushScope ? { metadata: { scope } } : {}),
   });
   const filtered = matches.filter((m) => m.score >= threshold);
   if (filtered.length === 0) {
@@ -32,7 +40,8 @@ export async function memoryRecall(
     scores: filtered.map((m) => m.score),
   });
   const scoreById = new Map(filtered.map((m) => [m.id, m.score] as const));
-  const results = items.map((item) => {
+  const scoped = scope === undefined ? items : items.filter((item) => item.thought.scope === scope);
+  const results = scoped.slice(0, limit).map((item) => {
     const score = scoreById.get(item.thought._id) ?? 0;
     return {
       id: ThoughtId.parse(item.thought._id),

@@ -21,7 +21,12 @@ export async function captureThought(
   assertUserId(userId);
   const input: CaptureThoughtInput = parseInput(captureThoughtInputSchema, rawInput);
   const fingerprint = await contentFingerprint(input.content);
-  const existing = await deps.convex.getByFingerprint({ userId, fingerprint });
+  const scope = input.scope;
+  const existing = await deps.convex.getByFingerprint({
+    userId,
+    fingerprint,
+    ...(scope === undefined ? {} : { scope }),
+  });
   if (existing !== null) {
     return { thoughtId: existing._id, duplicate: true };
   }
@@ -35,12 +40,19 @@ export async function captureThought(
     embeddingDims: embedding.dimensions,
     fingerprint,
     metadata,
+    ...(scope === undefined ? {} : { scope }),
   });
+  // Vector metadata carries scope so a follow-up Vectorize metadata index +
+  // filter call can scope semantic search. Post-filter via Convex covers the
+  // gap until then (see memoryRecall).
   await deps.vectorize.upsert({
     id,
     userId,
     values: embedding.vector,
-    metadata: { source: input.source },
+    metadata: {
+      source: input.source,
+      ...(scope === undefined ? {} : { scope }),
+    },
   });
   return { thoughtId: id, duplicate: false };
 }

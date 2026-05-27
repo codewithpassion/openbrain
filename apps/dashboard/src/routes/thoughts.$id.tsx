@@ -95,12 +95,15 @@ interface LoadedProps {
 function Loaded({ id, thought, model }: LoadedProps) {
   const deleteThought = useMutation(api.thoughts.deleteThought);
   const promote = useMutation(api.memory.review.promote);
+  const reembed = useMutation(api.thoughts.reembedThought);
   const navigate = useNavigate();
-  const [busy, setBusy] = useState<"delete" | "promote" | null>(null);
+  const [busy, setBusy] = useState<"delete" | "promote" | "reindex" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const onDelete = async () => {
     setError(null);
+    setNotice(null);
     setBusy("delete");
     try {
       await deleteThought({ id });
@@ -113,11 +116,26 @@ function Loaded({ id, thought, model }: LoadedProps) {
 
   const onPromote = async () => {
     setError(null);
+    setNotice(null);
     setBusy("promote");
     try {
       await promote({ thoughtId: id });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to promote");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onReindex = async () => {
+    setError(null);
+    setNotice(null);
+    setBusy("reindex");
+    try {
+      await reembed({ id });
+      setNotice("Reindex queued. Search results refresh once the action completes.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to reindex");
     } finally {
       setBusy(null);
     }
@@ -137,10 +155,26 @@ function Loaded({ id, thought, model }: LoadedProps) {
         <Link to="/" className="text-muted-foreground text-sm underline-offset-4 hover:underline">
           ← back
         </Link>
-        <Button type="button" variant="destructive" onClick={onDelete} disabled={busy === "delete"}>
-          {busy === "delete" ? "Deleting…" : "Delete thought"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onReindex}
+            disabled={busy === "reindex" || busy === "delete"}
+          >
+            {busy === "reindex" ? "Reindexing…" : "Reindex"}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={onDelete}
+            disabled={busy === "delete"}
+          >
+            {busy === "delete" ? "Deleting…" : "Delete thought"}
+          </Button>
+        </div>
       </div>
+      {notice === null ? null : <p className="text-muted-foreground text-sm">{notice}</p>}
       {error === null ? null : <p className="text-destructive text-sm">{error}</p>}
     </div>
   );
@@ -234,8 +268,8 @@ function ContentCard({ id, thought, model, onError }: ContentCardProps) {
               disabled={saving}
             />
             <p className="text-muted-foreground text-xs">
-              Vectorize embeddings are not re-computed by the dashboard — search results may lag
-              until the next re-embed pass.
+              Saving auto-queues a reindex. Search results refresh once the embedding job completes
+              — usually within a few seconds.
             </p>
             <div className="flex items-center gap-2">
               <Button type="button" onClick={save} disabled={saving}>
@@ -281,7 +315,7 @@ function ActionItemsCard({ items }: { readonly items: readonly string[] }) {
 
 interface TrustCardProps {
   readonly model: ThoughtDetailModel;
-  readonly busy: "delete" | "promote" | null;
+  readonly busy: "delete" | "promote" | "reindex" | null;
   readonly onPromote: () => Promise<void>;
 }
 

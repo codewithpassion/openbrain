@@ -77,6 +77,107 @@ describe("briefings.recordInternal", () => {
   });
 });
 
+describe("briefings.recordInternal — paired briefing-thought (Phase G)", () => {
+  test("creates a briefing-thought when the briefing is written", async () => {
+    const t = makeTest();
+    await t.mutation(internal.briefings.recordInternal, {
+      userId: TEST_USER_A,
+      date: "2026-05-19",
+      summary: "Today I shipped Phase G.",
+      sections: sampleSections,
+      thoughtIds: [],
+      generator: "fake:life-engine",
+    });
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const thoughts = await ctxA.query(api.thoughts.listThoughts, { limit: 50 });
+    const briefingThoughts = thoughts.filter((t) => t.metadata.type === "briefing");
+    expect(briefingThoughts).toHaveLength(1);
+    expect(briefingThoughts[0]?.source).toBe("life-engine:briefing");
+    expect(briefingThoughts[0]?.content).toContain("Today I shipped Phase G.");
+  });
+
+  test("briefing-thought gets evidence-grade provenance + use_policy sidecars", async () => {
+    const t = makeTest();
+    await t.mutation(internal.briefings.recordInternal, {
+      userId: TEST_USER_A,
+      date: "2026-05-19",
+      summary: "Today.",
+      sections: sampleSections,
+      thoughtIds: [],
+      generator: "fake",
+    });
+    const briefingThought = await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("thoughts")
+        .withIndex("by_user_created", (q) => q.eq("userId", TEST_USER_A))
+        .collect();
+      return rows.find((r) => r.metadata.type === "briefing");
+    });
+    expect(briefingThought).toBeDefined();
+    const provenance = await t.run(async (ctx) =>
+      ctx.db
+        .query("memory_provenance")
+        .withIndex("by_thought", (q) => q.eq("thoughtId", briefingThought!._id))
+        .unique(),
+    );
+    expect(provenance?.origin).toBe("agent_generated");
+    expect(provenance?.agent).toBe("life-engine");
+    const policy = await t.run(async (ctx) =>
+      ctx.db
+        .query("memory_use_policy")
+        .withIndex("by_thought", (q) => q.eq("thoughtId", briefingThought!._id))
+        .unique(),
+    );
+    expect(policy?.trustGrade).toBe("evidence");
+  });
+
+  test("re-running for the same (userId, date) patches the existing briefing-thought, not a new one", async () => {
+    const t = makeTest();
+    await t.mutation(internal.briefings.recordInternal, {
+      userId: TEST_USER_A,
+      date: "2026-05-19",
+      summary: "v1",
+      sections: sampleSections,
+      thoughtIds: [],
+      generator: "fake",
+    });
+    await t.mutation(internal.briefings.recordInternal, {
+      userId: TEST_USER_A,
+      date: "2026-05-19",
+      summary: "v2",
+      sections: sampleSections,
+      thoughtIds: [],
+      generator: "fake",
+    });
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const thoughts = await ctxA.query(api.thoughts.listThoughts, { limit: 50 });
+    const briefingThoughts = thoughts.filter((t) => t.metadata.type === "briefing");
+    expect(briefingThoughts).toHaveLength(1);
+    expect(briefingThoughts[0]?.content).toContain("v2");
+  });
+});
+
+describe("briefingsAction.generateForUserInternal", () => {
+  test("skipped when OPENROUTER_API_KEY is unset", async () => {
+    const t = makeTest();
+    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
+    const prior = process.env["OPENROUTER_API_KEY"];
+    // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
+    delete process.env["OPENROUTER_API_KEY"];
+    try {
+      const out = await t.action(internal.briefingsAction.generateForUserInternal, {
+        userId: TEST_USER_A,
+      });
+      expect(out.status).toBe("skipped");
+    } finally {
+      if (prior !== undefined) {
+        // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
+        process.env["OPENROUTER_API_KEY"] = prior;
+      }
+    }
+  });
+});
+
 describe("briefings.worldModelForInternal", () => {
   test("returns null when no world-model thought has been promoted", async () => {
     const t = makeTest();

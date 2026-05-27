@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ThoughtCard } from "../components/thought-card";
 import type { ThoughtLike } from "../components/thought-card-model";
 import { Input } from "../components/ui/input";
+import { useActiveScope } from "../lib/active-scope";
 import { searchThoughtsFn } from "../server/search";
 
 export const Route = createFileRoute("/search")({ component: Search });
@@ -47,6 +48,7 @@ function toThoughtLike(r: SearchResultRow): ThoughtLike {
 
 function Body() {
   const search = useServerFn(searchThoughtsFn);
+  const { scope } = useActiveScope();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [results, setResults] = useState<readonly SearchResultRow[] | null>(null);
@@ -63,7 +65,9 @@ function Body() {
     setError(null);
     setSubmitted(trimmed);
     try {
-      const out = await search({ data: { query: trimmed } });
+      const out = await search({
+        data: { query: trimmed, ...(scope === null ? {} : { scope }) },
+      });
       setResults(out.results);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");

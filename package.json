@@ -19,7 +19,8 @@
     "check": "bun run lint && bun run typecheck && bun run test",
     "smoke": "bun --filter @openbrains/scripts smoke",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
-    "tunnel": "cloudflared tunnel --config /dev/null --url http://localhost:8787"
+    "tunnel": "cloudflared tunnel --config /dev/null --url http://localhost:8787",
+    "deploy": "cd apps/mcp && bun run deploy && cd ../dashboard && bun run deploy"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",

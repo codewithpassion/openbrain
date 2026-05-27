@@ -354,6 +354,132 @@ describe("thoughts", () => {
     ).rejects.toThrow(/FINGERPRINT_COLLISION/);
   });
 
+  test("createThought tags the row with a valid scope", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    await ctxA.mutation(api.projects.create, { slug: "work", name: "Work" });
+    const fx = makeThought(TEST_USER_A);
+    const id = await ctxA.mutation(api.thoughts.createThought, {
+      content: fx.content,
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fx.fingerprint,
+      metadata: fx.metadata,
+      scope: "work",
+    });
+    const got = await ctxA.query(api.thoughts.getThought, { id });
+    expect(got?.scope).toBe("work");
+  });
+
+  test("createThought rejects unknown scope with PROJECT_NOT_FOUND", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    const fx = makeThought(TEST_USER_A);
+    await expect(
+      ctxA.mutation(api.thoughts.createThought, {
+        content: fx.content,
+        source: fx.source,
+        embeddingModel: fx.embeddingModel,
+        embeddingDims: fx.embeddingDims,
+        fingerprint: fx.fingerprint,
+        metadata: fx.metadata,
+        scope: "doesnt-exist",
+      }),
+    ).rejects.toThrow(/PROJECT_NOT_FOUND/);
+  });
+
+  test("createThought scope is per-user — A's project is invisible to B", async () => {
+    const t = makeTest();
+    await t
+      .withIdentity({ subject: TEST_USER_A })
+      .mutation(api.projects.create, { slug: "work", name: "Work" });
+    const fx = makeThought(TEST_USER_B);
+    await expect(
+      t.withIdentity({ subject: TEST_USER_B }).mutation(api.thoughts.createThought, {
+        content: fx.content,
+        source: fx.source,
+        embeddingModel: fx.embeddingModel,
+        embeddingDims: fx.embeddingDims,
+        fingerprint: fx.fingerprint,
+        metadata: fx.metadata,
+        scope: "work",
+      }),
+    ).rejects.toThrow(/PROJECT_NOT_FOUND/);
+  });
+
+  test("listThoughts(scope) returns only thoughts in that scope", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    await ctxA.mutation(api.projects.create, { slug: "work", name: "Work" });
+    await ctxA.mutation(api.projects.create, { slug: "side", name: "Side" });
+    const base = makeThought(TEST_USER_A);
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "unscoped",
+      source: base.source,
+      embeddingModel: base.embeddingModel,
+      embeddingDims: base.embeddingDims,
+      fingerprint: "1".repeat(64),
+      metadata: base.metadata,
+    });
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "work-note",
+      source: base.source,
+      embeddingModel: base.embeddingModel,
+      embeddingDims: base.embeddingDims,
+      fingerprint: "2".repeat(64),
+      metadata: base.metadata,
+      scope: "work",
+    });
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "side-note",
+      source: base.source,
+      embeddingModel: base.embeddingModel,
+      embeddingDims: base.embeddingDims,
+      fingerprint: "3".repeat(64),
+      metadata: base.metadata,
+      scope: "side",
+    });
+    const workOnly = await ctxA.query(api.thoughts.listThoughts, { scope: "work" });
+    expect(workOnly.map((r) => r.content)).toEqual(["work-note"]);
+    const sideOnly = await ctxA.query(api.thoughts.listThoughts, { scope: "side" });
+    expect(sideOnly.map((r) => r.content)).toEqual(["side-note"]);
+    const all = await ctxA.query(api.thoughts.listThoughts, {});
+    expect(all.map((r) => r.content).sort()).toEqual(["side-note", "unscoped", "work-note"]);
+  });
+
+  test("getByFingerprint is scope-aware: same fingerprint in different scopes are distinct", async () => {
+    const t = makeTest();
+    const ctxA = t.withIdentity({ subject: TEST_USER_A });
+    await ctxA.mutation(api.projects.create, { slug: "work", name: "Work" });
+    const fp = "f".repeat(64);
+    const fx = makeThought(TEST_USER_A, { fingerprint: fp });
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "in work",
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fp,
+      metadata: fx.metadata,
+      scope: "work",
+    });
+    await ctxA.mutation(api.thoughts.createThought, {
+      content: "unscoped twin",
+      source: fx.source,
+      embeddingModel: fx.embeddingModel,
+      embeddingDims: fx.embeddingDims,
+      fingerprint: fp,
+      metadata: fx.metadata,
+    });
+    const workHit = await ctxA.query(api.thoughts.getByFingerprint, {
+      fingerprint: fp,
+      scope: "work",
+    });
+    expect(workHit?.content).toBe("in work");
+    const unscopedHit = await ctxA.query(api.thoughts.getByFingerprint, { fingerprint: fp });
+    expect(unscopedHit?.content).toBe("unscoped twin");
+  });
+
   test("updateContent refuses cross-tenant access", async () => {
     const t = makeTest();
     const fx = makeThought(TEST_USER_A);

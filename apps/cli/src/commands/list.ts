@@ -1,4 +1,4 @@
-import type { ListThoughtsInput, ThoughtType } from "@openbrains/shared";
+import { type ListThoughtsInput, ProjectSlug, type ThoughtType } from "@openbrains/shared";
 import { type Flags, flagString } from "../flags";
 import type { McpClientLike } from "../mcp-client";
 import { emit, emitJson, isJsonFlag } from "../output";
@@ -6,6 +6,7 @@ import { emit, emitJson, isJsonFlag } from "../output";
 export interface ListOptions {
   client: McpClientLike;
   flags: Flags;
+  scope?: string;
 }
 
 function parseDays(flags: Flags): number | undefined {
@@ -33,6 +34,7 @@ export async function runList(opts: ListOptions): Promise<number> {
     limit: 20,
     ...(days === undefined ? {} : { days }),
     ...(type === undefined ? {} : { type }),
+    ...(opts.scope === undefined ? {} : { scope: ProjectSlug.parse(opts.scope) }),
   };
   const result = await opts.client.listThoughts(input);
   if (isJsonFlag(opts.flags)) {

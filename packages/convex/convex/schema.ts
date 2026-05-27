@@ -5,14 +5,35 @@ import { v } from "convex/values";
 // TypeScript `any` — see CLAUDE.md §2. memory_audit.diff is genuinely opaque.
 
 export default defineSchema({
+  // Project namespace within a user's brain. A user has one connected brain;
+  // `scope` lets them target a subset ("work", "side-project-x"). Unscoped
+  // thoughts (scope undefined) are visible regardless of scope filter — they
+  // are "personal/global" memory.
+  projects: defineTable({
+    userId: v.string(),
+    slug: v.string(), // URL/CLI-friendly identifier — `(userId, slug)` unique
+    name: v.string(), // human label
+    description: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user_slug", ["userId", "slug"])
+    .index("by_user_created", ["userId", "createdAt"]),
+
   thoughts: defineTable({
     userId: v.string(),
     content: v.string(),
     source: v.string(),
+    // Optional project scope. Validated against the `projects` table at write
+    // time. Unscoped (undefined) = visible from any project view.
+    scope: v.optional(v.string()),
     vectorizeId: v.optional(v.string()),
     embeddingModel: v.string(),
     embeddingDims: v.number(),
     fingerprint: v.string(),
+    // Phase E: panning-for-gold persistence. A child thought split out of a
+    // brain-dump references its parent here so the lineage survives later
+    // edits / re-embeds. Optional — most thoughts have no parent.
+    parentThoughtId: v.optional(v.id("thoughts")),
     metadata: v.object({
       type: v.optional(v.string()),
       topics: v.array(v.string()),
@@ -24,7 +45,13 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user_created", ["userId", "createdAt"])
-    .index("by_user_fingerprint", ["userId", "fingerprint"]),
+    .index("by_user_fingerprint", ["userId", "fingerprint"])
+    .index("by_user_parent", ["userId", "parentThoughtId"])
+    .index("by_user_scope_created", ["userId", "scope", "createdAt"])
+    // Scope-aware dedup. Same content can exist in different scopes (e.g.
+    // "deploy script" idea in `work` and `side-project`); fingerprint
+    // uniqueness is per (userId, scope).
+    .index("by_user_scope_fingerprint", ["userId", "scope", "fingerprint"]),
 
   memory_provenance: defineTable({
     thoughtId: v.id("thoughts"),

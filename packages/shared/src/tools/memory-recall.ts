@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ThoughtId } from "../ids";
+import { ProjectSlug, ThoughtId } from "../ids";
 import { MemoryOrigin, TrustGrade } from "../memory";
 
 export const memoryRecallInputSchema = z.object({
@@ -7,7 +7,7 @@ export const memoryRecallInputSchema = z.object({
   limit: z.number().int().min(1).max(100).default(10),
   threshold: z.number().min(0).max(1).default(0.5),
   minTrustGrade: TrustGrade.optional(),
-  scope: z.string().min(1).optional(),
+  scope: ProjectSlug.optional(),
 });
 export type MemoryRecallInput = z.infer<typeof memoryRecallInputSchema>;
 

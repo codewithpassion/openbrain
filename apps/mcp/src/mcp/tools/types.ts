@@ -2,6 +2,7 @@ import type { BrainDumpSplitter, EmbeddingAdapter, MetadataExtractor } from "@op
 import type { AuthContext } from "../../auth/types";
 import type { ConvexClient } from "../../deps/convex";
 import type { VectorizeClient } from "../../deps/vectorize";
+import type { SessionScopeStore } from "../session-scope-store";
 
 export interface ToolDeps {
   convex: ConvexClient;
@@ -9,6 +10,13 @@ export interface ToolDeps {
   embeddings: EmbeddingAdapter;
   metadata: MetadataExtractor;
   splitter: BrainDumpSplitter;
+  /**
+   * Per-user pinned default scope. Optional so existing tests that don't
+   * exercise the scope-default path don't need to wire one through; absent
+   * means "no default" (handlers fall through to the tool input's scope or
+   * unscoped). The Worker handler always provides a real one.
+   */
+  sessionScope?: SessionScopeStore;
 }
 
 export interface ToolEnvelope {

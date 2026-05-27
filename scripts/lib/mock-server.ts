@@ -11,6 +11,8 @@ import {
   memoryRecallOutputSchema,
   memoryWritebackInputSchema,
   memoryWritebackOutputSchema,
+  ProjectId,
+  ProjectSlug,
   searchThoughtsInputSchema,
   searchThoughtsOutputSchema,
   ThoughtId,
@@ -288,6 +290,27 @@ export async function startMockMcp(): Promise<MockMcpHandle> {
       const res = await call("memory_writeback", input);
       return parseStructured(res, memoryWritebackOutputSchema, "memory_writeback");
     },
+    classifyThought: () => Promise.resolve({ type: "observation" as const }),
+    enrichThought: () =>
+      Promise.resolve({
+        metadata: { topics: [], people: [], action_items: [], dates_mentioned: [] },
+      }),
+    panBrainDump: () => Promise.resolve({ ideas: [] }),
+    relatedThoughts: () => Promise.resolve({ results: [] }),
+    updateThought: (input) => Promise.resolve({ thoughtId: input.thoughtId, reEmbedded: true }),
+    applyClassification: () => Promise.resolve({ type: "observation" as const, applied: true }),
+    applyEnrichment: () =>
+      Promise.resolve({
+        metadata: { topics: [], people: [], action_items: [], dates_mentioned: [] },
+        applied: true,
+      }),
+    applySplit: () => Promise.resolve({ created: 0, childIds: [] }),
+    listProjects: () => Promise.resolve({ projects: [] }),
+    createProject: (input) =>
+      Promise.resolve({
+        projectId: ProjectId.parse(`p_mock_${input.slug}`),
+        slug: ProjectSlug.parse(input.slug),
+      }),
     async close() {
       await sdkClient.close();
     },

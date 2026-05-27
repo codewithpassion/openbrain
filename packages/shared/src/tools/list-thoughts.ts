@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ThoughtId } from "../ids";
+import { ProjectSlug, ThoughtId } from "../ids";
 import { ThoughtType } from "../thoughts";
 
 export const listThoughtsInputSchema = z.object({
@@ -8,6 +8,7 @@ export const listThoughtsInputSchema = z.object({
   type: ThoughtType.optional(),
   topic: z.string().min(1).optional(),
   person: z.string().min(1).optional(),
+  scope: ProjectSlug.optional(),
 });
 export type ListThoughtsInput = z.infer<typeof listThoughtsInputSchema>;
 

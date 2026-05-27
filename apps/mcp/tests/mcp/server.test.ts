@@ -33,6 +33,15 @@ describe("buildServer", () => {
       "classify_thought",
       "enrich_thought",
       "pan_brain_dump",
+      "related_thoughts",
+      "update_thought",
+      "classify_thought_apply",
+      "enrich_thought_apply",
+      "pan_brain_dump_apply",
+      "list_projects",
+      "create_project",
+      "set_session_scope",
+      "get_session_scope",
     ]);
   });
 });

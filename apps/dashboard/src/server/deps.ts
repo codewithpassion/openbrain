@@ -32,6 +32,8 @@ interface DashboardWorkerEnv {
   CONVEX_URL: string;
   INTERNAL_API_SECRET: string;
   EMBEDDING_MODEL?: string;
+  /** "1"/"true" once the Vectorize `scope` metadata index exists. */
+  SCOPE_INDEX_READY?: string;
 }
 
 function getDashboardEnv(): DashboardWorkerEnv {
@@ -54,11 +56,13 @@ function getDashboardEnv(): DashboardWorkerEnv {
     CONVEX_URL: e.CONVEX_URL,
     INTERNAL_API_SECRET: e.INTERNAL_API_SECRET,
     ...(e.EMBEDDING_MODEL === undefined ? {} : { EMBEDDING_MODEL: e.EMBEDDING_MODEL }),
+    ...(e.SCOPE_INDEX_READY === undefined ? {} : { SCOPE_INDEX_READY: e.SCOPE_INDEX_READY }),
   };
 }
 
 export function buildServiceDeps(): ServiceDeps {
   const e = getDashboardEnv();
+  const scopeIndexReady = e.SCOPE_INDEX_READY === "1" || e.SCOPE_INDEX_READY === "true";
   return {
     embeddings:
       e.EMBEDDING_MODEL === undefined
@@ -69,5 +73,6 @@ export function buildServiceDeps(): ServiceDeps {
       convexUrl: e.CONVEX_URL,
       internalSecret: e.INTERNAL_API_SECRET,
     }),
+    featureFlags: { scopeIndexReady },
   };
 }

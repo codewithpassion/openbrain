@@ -17,4 +17,15 @@ crons.daily(
   internal.digestsCron.fanOutDailyDigests,
 );
 
+/**
+ * Daily life-engine briefing fan-out. Scheduled 30 min after digests so the
+ * two crons don't pile onto the same window of token spend; the briefing
+ * action is independent and re-uses the same active-user list.
+ */
+crons.daily(
+  "briefings.daily fan-out",
+  { hourUTC: 12, minuteUTC: 30 },
+  internal.briefingsCron.fanOutDailyBriefings,
+);
+
 export default crons;

@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { ThoughtId } from "../ids";
+import { ProjectSlug, ThoughtId } from "../ids";
 
 export const captureThoughtInputSchema = z.object({
   content: z.string().min(1).max(50_000),
   source: z.string().min(1),
+  scope: ProjectSlug.optional(),
 });
 export type CaptureThoughtInput = z.infer<typeof captureThoughtInputSchema>;
 

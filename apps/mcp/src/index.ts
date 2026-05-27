@@ -6,6 +6,12 @@ import { DEVICE_TOKEN_PREFIX, signDeviceToken, verifyDeviceToken } from "./auth/
 import type { AuthProps } from "./auth/types";
 import type { WorkerEnv } from "./env";
 import { handleAiRunRequest, INTERNAL_AI_RUN_PATH } from "./internal/ai-route";
+import {
+  handleVectorDeleteRequest,
+  handleVectorUpsertRequest,
+  INTERNAL_VECTOR_DELETE_PATH,
+  INTERNAL_VECTOR_UPSERT_PATH,
+} from "./internal/vector-route";
 import { mcpApiHandler } from "./mcp/handler";
 
 const DEVICE_TOKEN_TTL_SECONDS = 3600;
@@ -83,6 +89,18 @@ const handler: ExportedHandler<WorkerEnv> = {
     if (url.pathname === INTERNAL_AI_RUN_PATH) {
       return await handleAiRunRequest(request, {
         AI: env.AI,
+        INTERNAL_API_SECRET: env.INTERNAL_API_SECRET,
+      });
+    }
+    if (url.pathname === INTERNAL_VECTOR_UPSERT_PATH) {
+      return await handleVectorUpsertRequest(request, {
+        VECTORIZE: env.VECTORIZE,
+        INTERNAL_API_SECRET: env.INTERNAL_API_SECRET,
+      });
+    }
+    if (url.pathname === INTERNAL_VECTOR_DELETE_PATH) {
+      return await handleVectorDeleteRequest(request, {
+        VECTORIZE: env.VECTORIZE,
         INTERNAL_API_SECRET: env.INTERNAL_API_SECRET,
       });
     }

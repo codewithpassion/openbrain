@@ -15,6 +15,8 @@ import type * as aiAction from "../aiAction.js";
 import type * as apiKeys from "../apiKeys.js";
 import type * as brainBackup from "../brainBackup.js";
 import type * as briefings from "../briefings.js";
+import type * as briefingsAction from "../briefingsAction.js";
+import type * as briefingsCron from "../briefingsCron.js";
 import type * as crm from "../crm.js";
 import type * as crons from "../crons.js";
 import type * as digests from "../digests.js";
@@ -25,7 +27,6 @@ import type * as entitiesAction from "../entitiesAction.js";
 import type * as http from "../http.js";
 import type * as imports from "../imports.js";
 import type * as jobs from "../jobs.js";
-import type * as quality from "../quality.js";
 import type * as memory_audit from "../memory/audit.js";
 import type * as memory_provenance from "../memory/provenance.js";
 import type * as memory_recall from "../memory/recall.js";
@@ -34,7 +35,10 @@ import type * as memory_review from "../memory/review.js";
 import type * as memory_sourceRefs from "../memory/sourceRefs.js";
 import type * as memory_usePolicy from "../memory/usePolicy.js";
 import type * as memory_writeback from "../memory/writeback.js";
+import type * as projects from "../projects.js";
+import type * as quality from "../quality.js";
 import type * as thoughts from "../thoughts.js";
+import type * as thoughtsAction from "../thoughtsAction.js";
 
 import type {
   ApiFromModules,
@@ -50,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
   brainBackup: typeof brainBackup;
   briefings: typeof briefings;
+  briefingsAction: typeof briefingsAction;
+  briefingsCron: typeof briefingsCron;
   crm: typeof crm;
   crons: typeof crons;
   digests: typeof digests;
@@ -60,7 +66,6 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   imports: typeof imports;
   jobs: typeof jobs;
-  quality: typeof quality;
   "memory/audit": typeof memory_audit;
   "memory/provenance": typeof memory_provenance;
   "memory/recall": typeof memory_recall;
@@ -69,7 +74,10 @@ declare const fullApi: ApiFromModules<{
   "memory/sourceRefs": typeof memory_sourceRefs;
   "memory/usePolicy": typeof memory_usePolicy;
   "memory/writeback": typeof memory_writeback;
+  projects: typeof projects;
+  quality: typeof quality;
   thoughts: typeof thoughts;
+  thoughtsAction: typeof thoughtsAction;
 }>;
 
 /**

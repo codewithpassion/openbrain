@@ -9,6 +9,13 @@ export const credentialsSchema = z.object({
   expiresAt: z.number().int().positive(),
   userId: z.string().min(1),
   email: z.string().min(1).optional(),
+  /**
+   * Active project slug. When set, every command that accepts `--scope=` defaults
+   * to this slug. `ob project use <slug>` writes it after validating against
+   * `list_projects`; `ob project use --clear` removes it. The Convex boundary
+   * still rejects unknown slugs at write time.
+   */
+  activeProject: z.string().min(1).max(64).optional(),
 });
 
 export type Credentials = z.infer<typeof credentialsSchema>;

@@ -9,6 +9,7 @@ export {
   ConvexHttpError,
   type ConvexListEntitiesInput,
   type ConvexListFilter,
+  type ConvexProjectRow,
   type ConvexRecallInput,
   type ConvexReviewInput,
   ConvexReviewRequiredError,

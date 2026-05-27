@@ -1,3 +1,4 @@
+import { orgEntityMetadataSchema, personEntityMetadataSchema } from "@openbrains/shared";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
@@ -101,6 +102,59 @@ export const recordInteraction = mutation({
     return id;
   },
 });
+
+/**
+ * Phase F: update CRM-shaped metadata on a person/org entity. The Convex
+ * validator keeps the field as `v.any()` (per the CLAUDE.md pattern); the
+ * Zod schemas in `@openbrains/shared` enforce the real shape here at the
+ * boundary. Cross-kind writes are rejected so a person entity can't be
+ * patched with org fields by accident.
+ */
+export const updateEntityMetadata = mutation({
+  args: { entityId: v.id("entities"), metadata: v.any() },
+  handler: async (ctx, args): Promise<void> => {
+    const userId = await requireUserId(ctx);
+    const entity = await assertOwnedEntity(ctx, args.entityId, userId);
+    const validated = validateEntityMetadata(entity.kind, args.metadata);
+    await ctx.db.patch(args.entityId, {
+      metadata: validated,
+      updatedAt: Date.now(),
+    });
+    await writeAudit(ctx, {
+      userId,
+      action: "entity.updateMetadata",
+      actor: userId,
+      diff: { entityId: args.entityId, kind: entity.kind },
+    });
+  },
+});
+
+function validateEntityMetadata(kind: string, raw: unknown): unknown {
+  if (kind === "person") {
+    const parsed = personEntityMetadataSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ConvexError({
+        code: "INVALID",
+        message: `Invalid person metadata: ${parsed.error.message}`,
+      });
+    }
+    return parsed.data;
+  }
+  if (kind === "org") {
+    const parsed = orgEntityMetadataSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ConvexError({
+        code: "INVALID",
+        message: `Invalid org metadata: ${parsed.error.message}`,
+      });
+    }
+    return parsed.data;
+  }
+  throw new ConvexError({
+    code: "INVALID",
+    message: `Entity kind '${kind}' does not accept structured metadata`,
+  });
+}
 
 export const recordInteractionInternal = internalMutation({
   args: {

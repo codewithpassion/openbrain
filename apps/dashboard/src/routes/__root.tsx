@@ -1,6 +1,7 @@
 import { ClerkProvider, Show, UserButton, useAuth } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { ProjectSwitcher } from "../components/project-switcher";
 import { getClientEnv } from "../env";
 import { getConvexClient } from "../lib/convex";
 import appCss from "../styles.css?url";
@@ -93,8 +94,9 @@ function Shell() {
             </Link>
           </Show>
         </nav>
-        <div>
+        <div className="flex items-center gap-3">
           <Show when="signed-in">
+            <ProjectSwitcher />
             <UserButton />
           </Show>
           <Show when="signed-out">

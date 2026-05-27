@@ -9,9 +9,11 @@ import type {
   ConvexCaptureInput,
   ConvexClient,
   ConvexListFilter,
+  ConvexProjectRow,
   ConvexRecallInput,
   ConvexReviewInput,
   ConvexThoughtRow,
+  ConvexUpdateInput,
   ConvexWritebackInput,
   MemoryRecallResponse,
   ThoughtStatsResponse,
@@ -103,6 +105,7 @@ export interface FakeConvex extends ConvexClient {
   readonly statsCalls: readonly { userId: string }[];
   readonly getByIdsCalls: readonly { userId: string; ids: readonly string[] }[];
   readonly recallCalls: readonly ConvexRecallInput[];
+  readonly updateCalls: readonly ConvexUpdateInput[];
   seedThought(row: ConvexThoughtRow): void;
   seedFingerprintHit(userId: string, fingerprint: string, thoughtId: string): void;
   seedStats(userId: string, stats: ThoughtStatsResponse): void;
@@ -118,10 +121,12 @@ export function makeFakeConvex(): FakeConvex {
   const statsCalls: { userId: string }[] = [];
   const getByIdsCalls: { userId: string; ids: readonly string[] }[] = [];
   const recallCalls: ConvexRecallInput[] = [];
+  const updateCalls: ConvexUpdateInput[] = [];
   const rowsById = new Map<string, ConvexThoughtRow>();
   const fingerprintIndex = new Map<string, string>();
   const statsByUser = new Map<string, ThoughtStatsResponse>();
   const recallExtrasById = new Map<string, RecallExtras>();
+  const projects: ConvexProjectRow[] = [];
   let reviewResponseOverride: { reviewId: string; promoted: boolean } | "REQUIRES_REVIEW" | null =
     null;
   let idCounter = 0;
@@ -134,7 +139,8 @@ export function makeFakeConvex(): FakeConvex {
     captureThought(input) {
       captureCalls.push(input);
       const id = nextId();
-      fingerprintIndex.set(`${input.userId}::${input.fingerprint}`, id);
+      const scopeKey = input.scope ?? "";
+      fingerprintIndex.set(`${input.userId}::${scopeKey}::${input.fingerprint}`, id);
       const row: ConvexThoughtRow = {
         _id: id,
         userId: input.userId,
@@ -146,12 +152,37 @@ export function makeFakeConvex(): FakeConvex {
         metadata: input.metadata,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        ...(input.scope === undefined ? {} : { scope: input.scope }),
       };
       rowsById.set(id, row);
       return Promise.resolve({ id });
     },
+    updateThought(input) {
+      updateCalls.push(input);
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.reject(new Error("thought not found"));
+      }
+      const updated: ConvexThoughtRow = {
+        ...row,
+        content: input.content,
+        fingerprint: input.fingerprint,
+        metadata: input.metadata,
+        updatedAt: Date.now(),
+        ...(input.embeddingModel === undefined ? {} : { embeddingModel: input.embeddingModel }),
+        ...(input.embeddingDims === undefined ? {} : { embeddingDims: input.embeddingDims }),
+      };
+      rowsById.set(input.thoughtId, updated);
+      const updScopeKey = updated.scope ?? "";
+      fingerprintIndex.set(
+        `${input.userId}::${updScopeKey}::${input.fingerprint}`,
+        input.thoughtId,
+      );
+      return Promise.resolve();
+    },
     getByFingerprint(input) {
-      const id = fingerprintIndex.get(`${input.userId}::${input.fingerprint}`);
+      const scopeKey = input.scope ?? "";
+      const id = fingerprintIndex.get(`${input.userId}::${scopeKey}::${input.fingerprint}`);
       if (id === undefined) {
         return Promise.resolve(null);
       }
@@ -177,9 +208,11 @@ export function makeFakeConvex(): FakeConvex {
         ...(input.topic === undefined ? {} : { topic: input.topic }),
         ...(input.person === undefined ? {} : { person: input.person }),
         ...(input.days === undefined ? {} : { days: input.days }),
+        ...(input.scope === undefined ? {} : { scope: input.scope }),
       });
       const all = [...rowsById.values()]
         .filter((r) => r.userId === input.userId)
+        .filter((r) => input.scope === undefined || r.scope === input.scope)
         .sort((a, b) => b.createdAt - a.createdAt);
       const limited = input.limit === undefined ? all : all.slice(0, input.limit);
       return Promise.resolve(limited);
@@ -239,6 +272,68 @@ export function makeFakeConvex(): FakeConvex {
         promoted: input.promoteTo === "instruction",
       });
     },
+    setThoughtType(input) {
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.resolve({ wrote: false });
+      }
+      if (row.metadata.type !== undefined) {
+        return Promise.resolve({ wrote: false });
+      }
+      rowsById.set(input.thoughtId, {
+        ...row,
+        metadata: {
+          ...row.metadata,
+          type: input.type as ConvexThoughtRow["metadata"]["type"],
+        },
+        updatedAt: Date.now(),
+      });
+      return Promise.resolve({ wrote: true });
+    },
+    mergeThoughtMetadata(input) {
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.reject(new Error("thought not found"));
+      }
+      rowsById.set(input.thoughtId, {
+        ...row,
+        metadata: input.metadata,
+        updatedAt: Date.now(),
+      });
+      return Promise.resolve();
+    },
+    persistSplit(input) {
+      const parent = rowsById.get(input.parentThoughtId);
+      if (parent === undefined || parent.userId !== input.userId) {
+        return Promise.reject(new Error("parent thought not found"));
+      }
+      const childIds: string[] = [];
+      for (const idea of input.ideas) {
+        const id = nextId();
+        rowsById.set(id, {
+          _id: id,
+          userId: input.userId,
+          content: idea.content,
+          source: `split:${parent.source}`,
+          embeddingModel: parent.embeddingModel,
+          embeddingDims: parent.embeddingDims,
+          fingerprint: `${parent._id}-${idea.content}`.padEnd(64, "0").slice(0, 64),
+          metadata: {
+            ...(idea.type === undefined
+              ? {}
+              : { type: idea.type as ConvexThoughtRow["metadata"]["type"] }),
+            topics: [...idea.topics],
+            people: [],
+            action_items: [],
+            dates_mentioned: [],
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        childIds.push(id);
+      }
+      return Promise.resolve({ created: childIds.length, childIds });
+    },
     listEntities() {
       return Promise.resolve([]);
     },
@@ -247,6 +342,26 @@ export function makeFakeConvex(): FakeConvex {
     },
     entityRelations() {
       return Promise.resolve({ outgoing: [], incoming: [] });
+    },
+    listProjects(input) {
+      const out = projects.filter((p) => p.userId === input.userId);
+      return Promise.resolve(out);
+    },
+    createProject(input) {
+      if (projects.some((p) => p.userId === input.userId && p.slug === input.slug)) {
+        return Promise.reject(new Error("SLUG_TAKEN"));
+      }
+      const id = `p_${(projects.length + 1).toString().padStart(6, "0")}`;
+      const row: ConvexProjectRow = {
+        _id: id,
+        userId: input.userId,
+        slug: input.slug,
+        name: input.name,
+        createdAt: Date.now(),
+        ...(input.description === undefined ? {} : { description: input.description }),
+      };
+      projects.push(row);
+      return Promise.resolve({ id, slug: input.slug });
     },
   };
 
@@ -272,12 +387,18 @@ export function makeFakeConvex(): FakeConvex {
     get recallCalls() {
       return recallCalls;
     },
+    get updateCalls() {
+      return updateCalls;
+    },
     seedThought(row: ConvexThoughtRow) {
       rowsById.set(row._id, row);
-      fingerprintIndex.set(`${row.userId}::${row.fingerprint}`, row._id);
+      const scopeKey = row.scope ?? "";
+      fingerprintIndex.set(`${row.userId}::${scopeKey}::${row.fingerprint}`, row._id);
     },
     seedFingerprintHit(userId: string, fingerprint: string, thoughtId: string) {
-      fingerprintIndex.set(`${userId}::${fingerprint}`, thoughtId);
+      // Test helper: seeds against the unscoped namespace by default. Tests
+      // that need scoped seeding should `seedThought` with a `scope` field.
+      fingerprintIndex.set(`${userId}::::${fingerprint}`, thoughtId);
       if (!rowsById.has(thoughtId)) {
         rowsById.set(thoughtId, {
           _id: thoughtId,

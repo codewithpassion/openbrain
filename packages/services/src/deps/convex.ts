@@ -23,6 +23,7 @@ import {
   type ConvexEntityMentionRow,
   type ConvexEntityRelationRow,
   type ConvexEntityRow,
+  type ConvexProjectRow,
   type ConvexThoughtRow,
   EntityGetResponseSchema,
   EntityListResponseSchema,
@@ -30,6 +31,8 @@ import {
   type MemoryRecallResponse,
   MemoryRecallResponseSchema,
   type MemoryReviewStatus,
+  ProjectCreateResponseSchema,
+  ProjectListResponseSchema,
   ReviewRequiresReviewErrorSchema,
   type ReviewResponse,
   ReviewResponseSchema,
@@ -43,6 +46,7 @@ export type {
   ConvexEntityMentionRow,
   ConvexEntityRelationRow,
   ConvexEntityRow,
+  ConvexProjectRow,
   ConvexThoughtRow,
   MemoryRecallResponse,
   ReviewResponse,
@@ -59,6 +63,40 @@ export interface ConvexCaptureInput {
   embeddingDims: number;
   fingerprint: string;
   metadata: ThoughtMetadata;
+  scope?: string;
+}
+
+export interface ConvexUpdateInput {
+  userId: string;
+  thoughtId: string;
+  content: string;
+  fingerprint: string;
+  metadata: ThoughtMetadata;
+  embeddingModel?: string;
+  embeddingDims?: number;
+}
+
+export interface ConvexSetTypeInput {
+  userId: string;
+  thoughtId: string;
+  type: string;
+}
+
+export interface ConvexMergeMetadataInput {
+  userId: string;
+  thoughtId: string;
+  metadata: ThoughtMetadata;
+}
+
+export interface ConvexPersistSplitInput {
+  userId: string;
+  parentThoughtId: string;
+  ideas: readonly { content: string; type?: string; topics: readonly string[] }[];
+}
+
+export interface ConvexPersistSplitResult {
+  created: number;
+  childIds: readonly string[];
 }
 
 export interface ConvexWritebackProvenance {
@@ -96,6 +134,7 @@ export interface ConvexListFilter {
   topic?: string;
   person?: string;
   days?: number;
+  scope?: string;
 }
 
 export interface ConvexRecallInput {
@@ -123,8 +162,19 @@ export interface ConvexEntityRelationsInput {
   limit?: number;
 }
 
+export interface ConvexCreateProjectInput {
+  userId: string;
+  slug: string;
+  name: string;
+  description?: string;
+}
+
 export interface ConvexClient {
   captureThought(input: ConvexCaptureInput): Promise<{ id: string }>;
+  updateThought(input: ConvexUpdateInput): Promise<void>;
+  setThoughtType(input: ConvexSetTypeInput): Promise<{ wrote: boolean }>;
+  mergeThoughtMetadata(input: ConvexMergeMetadataInput): Promise<void>;
+  persistSplit(input: ConvexPersistSplitInput): Promise<ConvexPersistSplitResult>;
   /**
    * Returns the existing thought row for `(userId, fingerprint)` if any, or
    * `null` if none. Used by `capture-thought` to satisfy the idempotency
@@ -133,6 +183,7 @@ export interface ConvexClient {
   getByFingerprint(input: {
     userId: string;
     fingerprint: string;
+    scope?: string;
   }): Promise<ConvexThoughtRow | null>;
   getThoughtsByIds(input: {
     userId: string;
@@ -153,6 +204,8 @@ export interface ConvexClient {
     outgoing: readonly ConvexEntityRelationRow[];
     incoming: readonly ConvexEntityRelationRow[];
   }>;
+  listProjects(input: { userId: string }): Promise<readonly ConvexProjectRow[]>;
+  createProject(input: ConvexCreateProjectInput): Promise<{ id: string; slug: string }>;
 }
 
 interface ConvexClientOptions {
@@ -264,7 +317,15 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
 
   return {
     async captureThought(input) {
-      const body = {
+      const body: {
+        content: string;
+        source: string;
+        embeddingModel: string;
+        embeddingDims: number;
+        fingerprint: string;
+        metadata: ThoughtMetadata;
+        scope?: string;
+      } = {
         content: input.content,
         source: input.source,
         embeddingModel: input.embeddingModel,
@@ -272,13 +333,105 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
         fingerprint: input.fingerprint,
         metadata: input.metadata,
       };
+      if (input.scope !== undefined) {
+        body.scope = input.scope;
+      }
       return await post("/api/thoughts", input.userId, body, CaptureResponseSchema);
     },
+    async updateThought(input) {
+      const body: {
+        id: string;
+        content: string;
+        fingerprint: string;
+        metadata: ThoughtMetadata;
+        embeddingModel?: string;
+        embeddingDims?: number;
+      } = {
+        id: input.thoughtId,
+        content: input.content,
+        fingerprint: input.fingerprint,
+        metadata: input.metadata,
+      };
+      if (input.embeddingModel !== undefined) {
+        body.embeddingModel = input.embeddingModel;
+      }
+      if (input.embeddingDims !== undefined) {
+        body.embeddingDims = input.embeddingDims;
+      }
+      const { status, text } = await postJson("/api/thoughts/update", input.userId, body);
+      if (status === 404) {
+        throw new ConvexHttpError("thought not found", status);
+      }
+      if (status === 409) {
+        throw new ConvexHttpError("FINGERPRINT_COLLISION", status);
+      }
+      if (status < 200 || status >= 300) {
+        throw new ConvexHttpError(`update failed: ${status.toString()} ${text}`, status);
+      }
+    },
+    async setThoughtType(input) {
+      const { status, json, text } = await postJson("/api/thoughts/set-type", input.userId, {
+        thoughtId: input.thoughtId,
+        type: input.type,
+      });
+      if (status === 404) {
+        throw new ConvexHttpError("thought not found", status);
+      }
+      if (status < 200 || status >= 300) {
+        throw new ConvexHttpError(`set-type failed: ${status.toString()} ${text}`, status);
+      }
+      const wrote =
+        typeof json === "object" && json !== null && "wrote" in json
+          ? Boolean((json as { wrote: unknown }).wrote)
+          : false;
+      return { wrote };
+    },
+    async mergeThoughtMetadata(input) {
+      const { status, text } = await postJson("/api/thoughts/merge-metadata", input.userId, {
+        thoughtId: input.thoughtId,
+        metadata: input.metadata,
+      });
+      if (status === 404) {
+        throw new ConvexHttpError("thought not found", status);
+      }
+      if (status < 200 || status >= 300) {
+        throw new ConvexHttpError(`merge-metadata failed: ${status.toString()} ${text}`, status);
+      }
+    },
+    async persistSplit(input) {
+      const { status, json, text } = await postJson("/api/thoughts/persist-split", input.userId, {
+        parentThoughtId: input.parentThoughtId,
+        ideas: input.ideas.map((i) => ({
+          content: i.content,
+          ...(i.type === undefined ? {} : { type: i.type }),
+          topics: [...i.topics],
+        })),
+      });
+      if (status === 404) {
+        throw new ConvexHttpError("parent thought not found", status);
+      }
+      if (status < 200 || status >= 300) {
+        throw new ConvexHttpError(`persist-split failed: ${status.toString()} ${text}`, status);
+      }
+      if (typeof json !== "object" || json === null) {
+        throw new ConvexHttpError("persist-split: invalid response", status);
+      }
+      const o = json as { created?: unknown; childIds?: unknown };
+      const created = typeof o.created === "number" ? o.created : 0;
+      const childIds = Array.isArray(o.childIds)
+        ? o.childIds.filter((v): v is string => typeof v === "string")
+        : [];
+      return { created, childIds };
+    },
     async getByFingerprint(input) {
+      const body: { fingerprint: string; scope?: string } = { fingerprint: input.fingerprint };
+      if (input.scope !== undefined) {
+        body.scope = input.scope;
+      }
       const { thought } = await post(
         "/api/thoughts/by-fingerprint",
         input.userId,
-        { fingerprint: input.fingerprint },
+        body,
         ByFingerprintResponseSchema,
       );
       return thought;
@@ -299,6 +452,7 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
         topic?: string;
         person?: string;
         days?: number;
+        scope?: string;
       } = {};
       if (input.limit !== undefined) {
         body.limit = input.limit;
@@ -314,6 +468,9 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
       }
       if (input.days !== undefined) {
         body.days = input.days;
+      }
+      if (input.scope !== undefined) {
+        body.scope = input.scope;
       }
       const { rows } = await post(
         "/api/thoughts/list",
@@ -438,6 +595,31 @@ export function createConvexClient(options: ConvexClientOptions): ConvexClient {
         body,
         EntityRelationsResponseSchema,
       );
+    },
+    async listProjects(input) {
+      const { rows } = await post(
+        "/api/projects/list",
+        input.userId,
+        {},
+        ProjectListResponseSchema,
+      );
+      return rows;
+    },
+    async createProject(input) {
+      const body: { slug: string; name: string; description?: string } = {
+        slug: input.slug,
+        name: input.name,
+      };
+      if (input.description !== undefined) {
+        body.description = input.description;
+      }
+      const { id, slug } = await post(
+        "/api/projects",
+        input.userId,
+        body,
+        ProjectCreateResponseSchema,
+      );
+      return { id, slug };
     },
   };
 }

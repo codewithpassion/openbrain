@@ -1,3 +1,4 @@
+import { ProjectSlug } from "@openbrains/shared";
 import type { Flags } from "../flags";
 import type { McpClientLike } from "../mcp-client";
 import { emit, emitJson, isJsonFlag } from "../output";
@@ -5,6 +6,7 @@ import { emit, emitJson, isJsonFlag } from "../output";
 export interface SearchOptions {
   query: string;
   limit?: number;
+  scope?: string;
   client: McpClientLike;
   flags: Flags;
 }
@@ -14,6 +16,7 @@ export async function runSearch(opts: SearchOptions): Promise<number> {
     query: opts.query,
     limit: opts.limit ?? 10,
     threshold: 0.5,
+    ...(opts.scope === undefined ? {} : { scope: ProjectSlug.parse(opts.scope) }),
   });
   if (isJsonFlag(opts.flags)) {
     emitJson(result);

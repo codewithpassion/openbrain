@@ -1,5 +1,6 @@
+import type { GenericMutationCtx } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel.js";
+import type { DataModel, Doc, Id } from "./_generated/dataModel.js";
 import { internalMutation, query } from "./_generated/server.js";
 import { writeAudit } from "./_lib/audit.js";
 import { requireUserId } from "./_lib/identity.js";
@@ -80,6 +81,7 @@ export const recordInternal = internalMutation({
         generatedAt: row.generatedAt,
       });
     }
+    await upsertBriefingThought(ctx, args.userId, args.date, args.summary, args.sections);
     await writeAudit(ctx, {
       userId: args.userId,
       action: existing === null ? "briefing.create" : "briefing.regenerate",
@@ -89,6 +91,104 @@ export const recordInternal = internalMutation({
     return id;
   },
 });
+
+/**
+ * Phase G: emit the briefing as a `thoughts` row so it shows up in the same
+ * recall surface as everything else. Idempotent on `(userId, date)` via a
+ * derived fingerprint — re-running for the same date patches in place.
+ */
+async function upsertBriefingThought(
+  ctx: GenericMutationCtx<DataModel>,
+  userId: string,
+  date: string,
+  summary: string,
+  sections: {
+    recent: readonly string[];
+    followUps: readonly string[];
+    openQuestions: readonly string[];
+  },
+): Promise<void> {
+  const fingerprint = `briefing:${userId}:${date}`.padEnd(64, "0").slice(0, 64);
+  const content = renderBriefingContent(summary, sections);
+  const existing = await ctx.db
+    .query("thoughts")
+    .withIndex("by_user_fingerprint", (q) => q.eq("userId", userId).eq("fingerprint", fingerprint))
+    .unique();
+  const now = Date.now();
+  const metadata = {
+    type: "briefing",
+    topics: ["briefing"],
+    people: [],
+    action_items: [...sections.followUps],
+    dates_mentioned: [date],
+  };
+  let thoughtId: Id<"thoughts">;
+  if (existing === null) {
+    thoughtId = await ctx.db.insert("thoughts", {
+      userId,
+      content,
+      source: "life-engine:briefing",
+      embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+      embeddingDims: 1024,
+      fingerprint,
+      metadata,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } else {
+    thoughtId = existing._id;
+    await ctx.db.patch(thoughtId, { content, updatedAt: now, metadata });
+  }
+  // Briefings are agent-generated; CLAUDE.md §7 mandates evidence-grade by
+  // default. Sidecars are inserted only when missing — re-running for the same
+  // date doesn't duplicate them.
+  const provenance = await ctx.db
+    .query("memory_provenance")
+    .withIndex("by_thought", (q) => q.eq("thoughtId", thoughtId))
+    .unique();
+  if (provenance === null) {
+    await ctx.db.insert("memory_provenance", {
+      thoughtId,
+      userId,
+      origin: "agent_generated",
+      agent: "life-engine",
+      capturedAt: now,
+    });
+  }
+  const policy = await ctx.db
+    .query("memory_use_policy")
+    .withIndex("by_thought", (q) => q.eq("thoughtId", thoughtId))
+    .unique();
+  if (policy === null) {
+    await ctx.db.insert("memory_use_policy", {
+      thoughtId,
+      userId,
+      trustGrade: "evidence",
+      scopes: ["personal"],
+    });
+  }
+}
+
+function renderBriefingContent(
+  summary: string,
+  sections: {
+    recent: readonly string[];
+    followUps: readonly string[];
+    openQuestions: readonly string[];
+  },
+): string {
+  const parts: string[] = [summary.trim()];
+  if (sections.recent.length > 0) {
+    parts.push(`Recent:\n${sections.recent.map((s) => `- ${s}`).join("\n")}`);
+  }
+  if (sections.followUps.length > 0) {
+    parts.push(`Follow-ups:\n${sections.followUps.map((s) => `- ${s}`).join("\n")}`);
+  }
+  if (sections.openQuestions.length > 0) {
+    parts.push(`Open questions:\n${sections.openQuestions.map((s) => `- ${s}`).join("\n")}`);
+  }
+  return parts.join("\n\n");
+}
 
 /**
  * Fetch the user's "world model" thought, if one exists. Convention: a thought

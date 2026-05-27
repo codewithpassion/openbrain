@@ -1,5 +1,6 @@
 import { captureThought, ServiceAuthError, ServiceInputError } from "@openbrains/services";
 import { ThoughtId } from "@openbrains/shared";
+import { withSessionDefaultScope } from "../session-scope-store";
 import { err, ok, type ToolEnvelope, type ToolTextResult } from "./types";
 
 export async function captureThoughtHandler(
@@ -7,7 +8,12 @@ export async function captureThoughtHandler(
   envelope: ToolEnvelope,
 ): Promise<ToolTextResult> {
   try {
-    const out = await captureThought(envelope.deps, envelope.auth.userId, rawInput);
+    const withDefault = await withSessionDefaultScope(
+      rawInput,
+      envelope.deps.sessionScope,
+      envelope.auth.userId,
+    );
+    const out = await captureThought(envelope.deps, envelope.auth.userId, withDefault);
     return ok({ thoughtId: ThoughtId.parse(out.thoughtId), duplicate: out.duplicate });
   } catch (e) {
     if (e instanceof ServiceAuthError || e instanceof ServiceInputError) {

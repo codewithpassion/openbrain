@@ -16,6 +16,7 @@ import type {
   ConvexGetEntityInput,
   ConvexListEntitiesInput,
   ConvexListFilter,
+  ConvexProjectRow,
   ConvexRecallInput,
   ConvexReviewInput,
   ConvexThoughtRow,
@@ -24,6 +25,7 @@ import type {
   ThoughtStatsResponse,
 } from "../../src/deps/convex";
 import type { VectorizeBinding } from "../../src/env";
+import { createSessionScopeStore, type SessionScopeStore } from "../../src/mcp/session-scope-store";
 
 /* -------------------------------------------------------------------------- */
 /* FakeAi                                                                     */
@@ -177,6 +179,7 @@ export interface FakeConvex extends ConvexClient {
   seedEntity(row: ConvexEntityRow): void;
   seedEntityMention(row: ConvexEntityMentionRow): void;
   seedEntityRelation(row: ConvexEntityRelationRow): void;
+  seedProject(row: ConvexProjectRow): void;
 }
 
 export function makeFakeConvex(): FakeConvex {
@@ -197,6 +200,7 @@ export function makeFakeConvex(): FakeConvex {
   const listEntitiesCalls: ConvexListEntitiesInput[] = [];
   const getEntityCalls: ConvexGetEntityInput[] = [];
   const entityRelationsCalls: ConvexEntityRelationsInput[] = [];
+  const projectsList: ConvexProjectRow[] = [];
   let reviewResponseOverride: { reviewId: string; promoted: boolean } | null = null;
   let idCounter = 0;
   function nextId(): string {
@@ -205,10 +209,31 @@ export function makeFakeConvex(): FakeConvex {
   }
 
   const client: ConvexClient = {
+    updateThought(input) {
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.reject(new Error("thought not found"));
+      }
+      const updated: ConvexThoughtRow = {
+        ...row,
+        content: input.content,
+        fingerprint: input.fingerprint,
+        metadata: input.metadata,
+        updatedAt: Date.now(),
+      };
+      rowsById.set(input.thoughtId, updated);
+      const updScopeKey = updated.scope ?? "";
+      fingerprintIndex.set(
+        `${input.userId}::${updScopeKey}::${input.fingerprint}`,
+        input.thoughtId,
+      );
+      return Promise.resolve();
+    },
     captureThought(input) {
       captureCalls.push(input);
       const id = nextId();
-      fingerprintIndex.set(`${input.userId}::${input.fingerprint}`, id);
+      const scopeKey = input.scope ?? "";
+      fingerprintIndex.set(`${input.userId}::${scopeKey}::${input.fingerprint}`, id);
       const row: ConvexThoughtRow = {
         _id: id,
         userId: input.userId,
@@ -220,12 +245,76 @@ export function makeFakeConvex(): FakeConvex {
         metadata: input.metadata,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        ...(input.scope === undefined ? {} : { scope: input.scope }),
       };
       rowsById.set(id, row);
       return Promise.resolve({ id });
     },
+    setThoughtType(input) {
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.resolve({ wrote: false });
+      }
+      if (row.metadata.type !== undefined) {
+        return Promise.resolve({ wrote: false });
+      }
+      rowsById.set(input.thoughtId, {
+        ...row,
+        metadata: {
+          ...row.metadata,
+          type: input.type as ConvexThoughtRow["metadata"]["type"],
+        },
+        updatedAt: Date.now(),
+      });
+      return Promise.resolve({ wrote: true });
+    },
+    mergeThoughtMetadata(input) {
+      const row = rowsById.get(input.thoughtId);
+      if (row === undefined || row.userId !== input.userId) {
+        return Promise.reject(new Error("thought not found"));
+      }
+      rowsById.set(input.thoughtId, {
+        ...row,
+        metadata: input.metadata,
+        updatedAt: Date.now(),
+      });
+      return Promise.resolve();
+    },
+    persistSplit(input) {
+      const parent = rowsById.get(input.parentThoughtId);
+      if (parent === undefined || parent.userId !== input.userId) {
+        return Promise.reject(new Error("parent thought not found"));
+      }
+      const childIds: string[] = [];
+      for (const idea of input.ideas) {
+        const id = nextId();
+        rowsById.set(id, {
+          _id: id,
+          userId: input.userId,
+          content: idea.content,
+          source: `split:${parent.source}`,
+          embeddingModel: parent.embeddingModel,
+          embeddingDims: parent.embeddingDims,
+          fingerprint: `${parent._id}-${idea.content}`.padEnd(64, "0").slice(0, 64),
+          metadata: {
+            ...(idea.type === undefined
+              ? {}
+              : { type: idea.type as ConvexThoughtRow["metadata"]["type"] }),
+            topics: [...idea.topics],
+            people: [],
+            action_items: [],
+            dates_mentioned: [],
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        childIds.push(id);
+      }
+      return Promise.resolve({ created: childIds.length, childIds });
+    },
     getByFingerprint(input) {
-      const id = fingerprintIndex.get(`${input.userId}::${input.fingerprint}`);
+      const scopeKey = input.scope ?? "";
+      const id = fingerprintIndex.get(`${input.userId}::${scopeKey}::${input.fingerprint}`);
       if (id === undefined) {
         return Promise.resolve(null);
       }
@@ -251,9 +340,11 @@ export function makeFakeConvex(): FakeConvex {
         ...(input.topic === undefined ? {} : { topic: input.topic }),
         ...(input.person === undefined ? {} : { person: input.person }),
         ...(input.days === undefined ? {} : { days: input.days }),
+        ...(input.scope === undefined ? {} : { scope: input.scope }),
       });
       const all = [...rowsById.values()]
         .filter((r) => r.userId === input.userId)
+        .filter((r) => input.scope === undefined || r.scope === input.scope)
         .sort((a, b) => b.createdAt - a.createdAt);
       const matched = all.filter((row) => matchesFilters(row, input));
       const limited = input.limit === undefined ? matched : matched.slice(0, input.limit);
@@ -365,6 +456,25 @@ export function makeFakeConvex(): FakeConvex {
         .slice(0, limit);
       return Promise.resolve({ outgoing, incoming });
     },
+    listProjects(input) {
+      return Promise.resolve(projectsList.filter((p) => p.userId === input.userId));
+    },
+    createProject(input) {
+      if (projectsList.some((p) => p.userId === input.userId && p.slug === input.slug)) {
+        return Promise.reject(new Error("SLUG_TAKEN"));
+      }
+      const id = `p_${(projectsList.length + 1).toString().padStart(6, "0")}`;
+      const row: ConvexProjectRow = {
+        _id: id,
+        userId: input.userId,
+        slug: input.slug,
+        name: input.name,
+        createdAt: Date.now(),
+        ...(input.description === undefined ? {} : { description: input.description }),
+      };
+      projectsList.push(row);
+      return Promise.resolve({ id, slug: input.slug });
+    },
   };
 
   return Object.assign(client, {
@@ -391,10 +501,14 @@ export function makeFakeConvex(): FakeConvex {
     },
     seedThought(row: ConvexThoughtRow): void {
       rowsById.set(row._id, row);
-      fingerprintIndex.set(`${row.userId}::${row.fingerprint}`, row._id);
+      const scopeKey = row.scope ?? "";
+      fingerprintIndex.set(`${row.userId}::${scopeKey}::${row.fingerprint}`, row._id);
+    },
+    seedProject(row: ConvexProjectRow): void {
+      projectsList.push(row);
     },
     seedFingerprintHit(userId: string, fingerprint: string, thoughtId: string): void {
-      fingerprintIndex.set(`${userId}::${fingerprint}`, thoughtId);
+      fingerprintIndex.set(`${userId}::::${fingerprint}`, thoughtId);
       if (!rowsById.has(thoughtId)) {
         const row: ConvexThoughtRow = {
           _id: thoughtId,
@@ -468,11 +582,21 @@ function matchesFilters(row: ConvexThoughtRow, input: ConvexListFilter): boolean
  * Default LLM-adapter fakes for `ToolDeps`. Spread into a deps object alongside
  * convex/vectorize/embeddings. Tests that exercise the LLM tools override with
  * a programmable extractor.
+ *
+ * Also wires up an in-memory `sessionScope` store so handlers that read the
+ * pinned default see an empty/no-default state by default; tests that exercise
+ * the session-scope path can seed `defaults.sessionScope.set(userId, "slug")`
+ * after the call.
  */
-export function defaultExtras(): { metadata: MetadataExtractor; splitter: BrainDumpSplitter } {
+export function defaultExtras(): {
+  metadata: MetadataExtractor;
+  splitter: BrainDumpSplitter;
+  sessionScope: SessionScopeStore;
+} {
   return {
     metadata: createFakeMetadataExtractor(),
     splitter: createFakeBrainDumpSplitter(),
+    sessionScope: createSessionScopeStore(makeFakeKV()),
   };
 }
 

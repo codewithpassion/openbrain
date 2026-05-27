@@ -79,6 +79,7 @@ interface CaptureBody {
   embeddingDims: number;
   fingerprint: string;
   metadata: ThoughtMetadataBody;
+  scope?: string;
 }
 
 function isMetadataBody(value: unknown): value is ThoughtMetadataBody {
@@ -99,6 +100,9 @@ function isCaptureBody(body: unknown): body is CaptureBody {
     return false;
   }
   const b = body as Partial<CaptureBody>;
+  if (b.scope !== undefined && typeof b.scope !== "string") {
+    return false;
+  }
   return (
     typeof b.content === "string" &&
     typeof b.source === "string" &&
@@ -118,16 +122,105 @@ const captureThought = httpAction(async (ctx, request) => {
   if (!isCaptureBody(body)) {
     return jsonResponse({ error: "invalid body" }, 400);
   }
-  const id = await ctx.runMutation(internal.thoughts.createThoughtInternal, {
-    userId: auth.userId,
-    content: body.content,
-    source: body.source,
-    embeddingModel: body.embeddingModel,
-    embeddingDims: body.embeddingDims,
-    fingerprint: body.fingerprint,
-    metadata: body.metadata,
-  });
-  return jsonResponse({ id });
+  try {
+    const id = await ctx.runMutation(internal.thoughts.createThoughtInternal, {
+      userId: auth.userId,
+      content: body.content,
+      source: body.source,
+      embeddingModel: body.embeddingModel,
+      embeddingDims: body.embeddingDims,
+      fingerprint: body.fingerprint,
+      metadata: body.metadata,
+      ...(body.scope === undefined ? {} : { scope: body.scope }),
+    });
+    return jsonResponse({ id });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/PROJECT_NOT_FOUND/.test(message)) {
+      return jsonResponse({ error: "PROJECT_NOT_FOUND" }, 404);
+    }
+    throw e;
+  }
+});
+
+interface UpdateBody {
+  id: string;
+  content: string;
+  fingerprint: string;
+  metadata: ThoughtMetadataBody;
+  embeddingModel?: string;
+  embeddingDims?: number;
+}
+
+function isUpdateBody(body: unknown): body is UpdateBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<UpdateBody>;
+  if (typeof b.id !== "string") {
+    return false;
+  }
+  if (typeof b.content !== "string") {
+    return false;
+  }
+  if (typeof b.fingerprint !== "string") {
+    return false;
+  }
+  if (!isMetadataBody(b.metadata)) {
+    return false;
+  }
+  if (b.embeddingModel !== undefined && typeof b.embeddingModel !== "string") {
+    return false;
+  }
+  if (b.embeddingDims !== undefined && typeof b.embeddingDims !== "number") {
+    return false;
+  }
+  return true;
+}
+
+const updateThought = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isUpdateBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  try {
+    const args: {
+      userId: string;
+      id: Id<"thoughts">;
+      content: string;
+      fingerprint: string;
+      metadata: ThoughtMetadataBody;
+      embeddingModel?: string;
+      embeddingDims?: number;
+    } = {
+      userId: auth.userId,
+      id: body.id as unknown as Id<"thoughts">,
+      content: body.content,
+      fingerprint: body.fingerprint,
+      metadata: body.metadata,
+    };
+    if (body.embeddingModel !== undefined) {
+      args.embeddingModel = body.embeddingModel;
+    }
+    if (body.embeddingDims !== undefined) {
+      args.embeddingDims = body.embeddingDims;
+    }
+    await ctx.runMutation(internal.thoughts.updateContentInternal, args);
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/FINGERPRINT_COLLISION/.test(message)) {
+      return jsonResponse({ error: "FINGERPRINT_COLLISION" }, 409);
+    }
+    if (/NOT_FOUND/.test(message)) {
+      return jsonResponse({ error: "NOT_FOUND" }, 404);
+    }
+    throw e;
+  }
 });
 
 interface SearchBody {
@@ -179,6 +272,7 @@ interface ListBody {
   topic?: string;
   person?: string;
   days?: number;
+  scope?: string;
 }
 
 function isListBody(body: unknown): body is ListBody {
@@ -201,6 +295,9 @@ function isListBody(body: unknown): body is ListBody {
   if (b.days !== undefined && typeof b.days !== "number") {
     return false;
   }
+  if (b.scope !== undefined && typeof b.scope !== "string") {
+    return false;
+  }
   return true;
 }
 
@@ -220,6 +317,7 @@ const listThoughtsPost = httpAction(async (ctx, request) => {
     topic?: string;
     person?: string;
     days?: number;
+    scope?: string;
   } = { userId: auth.userId };
   if (body.limit !== undefined) {
     args.limit = body.limit;
@@ -236,6 +334,9 @@ const listThoughtsPost = httpAction(async (ctx, request) => {
   if (body.days !== undefined) {
     args.days = body.days;
   }
+  if (body.scope !== undefined) {
+    args.scope = body.scope;
+  }
   const rows = await ctx.runQuery(internal.thoughts.listThoughtsInternal, args);
   return jsonResponse({ rows });
 });
@@ -251,13 +352,18 @@ const thoughtStats = httpAction(async (ctx, request) => {
 
 interface FingerprintBody {
   fingerprint: string;
+  scope?: string;
 }
 
 function isFingerprintBody(body: unknown): body is FingerprintBody {
   if (body === null || typeof body !== "object") {
     return false;
   }
-  return typeof (body as Partial<FingerprintBody>).fingerprint === "string";
+  const b = body as Partial<FingerprintBody>;
+  if (b.scope !== undefined && typeof b.scope !== "string") {
+    return false;
+  }
+  return typeof b.fingerprint === "string";
 }
 
 const thoughtsByFingerprint = httpAction(async (ctx, request) => {
@@ -272,6 +378,7 @@ const thoughtsByFingerprint = httpAction(async (ctx, request) => {
   const thought = await ctx.runQuery(internal.thoughts.getByFingerprintInternal, {
     userId: auth.userId,
     fingerprint: body.fingerprint,
+    ...(body.scope === undefined ? {} : { scope: body.scope }),
   });
   return jsonResponse({ thought });
 });
@@ -619,12 +726,202 @@ const entityRelations = httpAction(async (ctx, request) => {
   return jsonResponse(result);
 });
 
+interface SetTypeBody {
+  thoughtId: string;
+  type: string;
+}
+
+function isSetTypeBody(body: unknown): body is SetTypeBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<SetTypeBody>;
+  return typeof b.thoughtId === "string" && typeof b.type === "string";
+}
+
+const setThoughtType = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isSetTypeBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  try {
+    const wrote = await ctx.runMutation(internal.thoughts.setTypeInternal, {
+      userId: auth.userId,
+      thoughtId: body.thoughtId as unknown as Id<"thoughts">,
+      type: body.type,
+    });
+    return jsonResponse({ wrote });
+  } catch (e) {
+    if (e instanceof Error && /NOT_FOUND/.test(e.message)) {
+      return jsonResponse({ error: "NOT_FOUND" }, 404);
+    }
+    throw e;
+  }
+});
+
+interface MergeMetadataBody {
+  thoughtId: string;
+  metadata: ThoughtMetadataBody;
+}
+
+function isMergeMetadataBody(body: unknown): body is MergeMetadataBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<MergeMetadataBody>;
+  return typeof b.thoughtId === "string" && isMetadataBody(b.metadata);
+}
+
+const mergeMetadata = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isMergeMetadataBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  try {
+    await ctx.runMutation(internal.thoughts.mergeMetadataInternal, {
+      userId: auth.userId,
+      thoughtId: body.thoughtId as unknown as Id<"thoughts">,
+      metadata: body.metadata,
+    });
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    if (e instanceof Error && /NOT_FOUND/.test(e.message)) {
+      return jsonResponse({ error: "NOT_FOUND" }, 404);
+    }
+    throw e;
+  }
+});
+
+interface PersistSplitBody {
+  parentThoughtId: string;
+  ideas: { content: string; type?: string; topics: string[] }[];
+}
+
+function isPersistSplitBody(body: unknown): body is PersistSplitBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<PersistSplitBody>;
+  if (typeof b.parentThoughtId !== "string") {
+    return false;
+  }
+  if (!Array.isArray(b.ideas)) {
+    return false;
+  }
+  return b.ideas.every((i) => {
+    if (i === null || typeof i !== "object") {
+      return false;
+    }
+    const idea = i as { content?: unknown; type?: unknown; topics?: unknown };
+    return (
+      typeof idea.content === "string" &&
+      Array.isArray(idea.topics) &&
+      idea.topics.every((t) => typeof t === "string") &&
+      (idea.type === undefined || typeof idea.type === "string")
+    );
+  });
+}
+
+const persistSplit = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isPersistSplitBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  try {
+    const result = await ctx.runMutation(internal.thoughts.persistSplitInternal, {
+      userId: auth.userId,
+      parentThoughtId: body.parentThoughtId as unknown as Id<"thoughts">,
+      ideas: body.ideas,
+    });
+    return jsonResponse({ created: result.created, childIds: result.childIds });
+  } catch (e) {
+    if (e instanceof Error && /NOT_FOUND/.test(e.message)) {
+      return jsonResponse({ error: "NOT_FOUND" }, 404);
+    }
+    throw e;
+  }
+});
+
+interface CreateProjectBody {
+  slug: string;
+  name: string;
+  description?: string;
+}
+
+function isCreateProjectBody(body: unknown): body is CreateProjectBody {
+  if (body === null || typeof body !== "object") {
+    return false;
+  }
+  const b = body as Partial<CreateProjectBody>;
+  if (typeof b.slug !== "string" || typeof b.name !== "string") {
+    return false;
+  }
+  if (b.description !== undefined && typeof b.description !== "string") {
+    return false;
+  }
+  return true;
+}
+
+const projectsCreate = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const body = await readJson(request);
+  if (!isCreateProjectBody(body)) {
+    return jsonResponse({ error: "invalid body" }, 400);
+  }
+  try {
+    const id = await ctx.runMutation(internal.projects.createInternal, {
+      userId: auth.userId,
+      slug: body.slug,
+      name: body.name,
+      ...(body.description === undefined ? {} : { description: body.description }),
+    });
+    return jsonResponse({ id, slug: body.slug });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/INVALID_SLUG/.test(message)) {
+      return jsonResponse({ error: "INVALID_SLUG" }, 400);
+    }
+    if (/SLUG_TAKEN/.test(message)) {
+      return jsonResponse({ error: "SLUG_TAKEN" }, 409);
+    }
+    throw e;
+  }
+});
+
+const projectsList = httpAction(async (ctx, request) => {
+  const auth = authorize(request);
+  if (auth instanceof Response) {
+    return auth;
+  }
+  const rows = await ctx.runQuery(internal.projects.listInternal, { userId: auth.userId });
+  return jsonResponse({ rows });
+});
+
 // `api` is imported only so its symbol is preserved in this module's surface
 // for downstream codegen; reference it to suppress noUnusedLocals.
 void api;
 
 const http = httpRouter();
 http.route({ path: "/api/thoughts", method: "POST", handler: captureThought });
+http.route({ path: "/api/thoughts/update", method: "POST", handler: updateThought });
+http.route({ path: "/api/thoughts/set-type", method: "POST", handler: setThoughtType });
+http.route({ path: "/api/thoughts/merge-metadata", method: "POST", handler: mergeMetadata });
+http.route({ path: "/api/thoughts/persist-split", method: "POST", handler: persistSplit });
 http.route({ path: "/api/thoughts/search", method: "POST", handler: searchThoughts });
 http.route({ path: "/api/thoughts", method: "GET", handler: listThoughts });
 http.route({ path: "/api/thoughts/list", method: "POST", handler: listThoughtsPost });
@@ -640,5 +937,7 @@ http.route({ path: "/api/memory/review", method: "POST", handler: memoryReview }
 http.route({ path: "/api/entities/list", method: "POST", handler: listEntities });
 http.route({ path: "/api/entities/get", method: "POST", handler: getEntity });
 http.route({ path: "/api/entities/relations", method: "POST", handler: entityRelations });
+http.route({ path: "/api/projects", method: "POST", handler: projectsCreate });
+http.route({ path: "/api/projects/list", method: "POST", handler: projectsList });
 
 export default http;

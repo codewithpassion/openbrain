@@ -1,6 +1,7 @@
 import { api } from "@openbrains/convex/api";
 import { useMutation } from "convex/react";
 import { useState } from "react";
+import { useActiveScope } from "../lib/active-scope";
 import { validateCapture } from "./quick-capture-model";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -27,6 +28,7 @@ export function QuickCapture() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const createThought = useMutation(api.thoughts.createThought);
+  const { scope } = useActiveScope();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +48,7 @@ export function QuickCapture() {
         embeddingDims: 1024,
         fingerprint,
         metadata: emptyMetadata(),
+        ...(scope === null ? {} : { scope }),
       });
       setContent("");
     } catch (err) {

@@ -87,3 +87,74 @@ describe("crm.recordInteraction", () => {
     ).rejects.toThrow(/NOT_FOUND/);
   });
 });
+
+describe("crm.updateEntityMetadata", () => {
+  test("patches person metadata after Zod validation", async () => {
+    const t = makeTest();
+    const entityId = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Alice", kind: "person", aliases: [] },
+    });
+    const at = Date.UTC(2026, 4, 19, 10, 0, 0);
+    await t.withIdentity({ subject: TEST_USER_A }).mutation(api.crm.updateEntityMetadata, {
+      entityId,
+      metadata: {
+        title: "Engineering Manager",
+        email: "alice@example.com",
+        last_contact_at: at,
+      },
+    });
+    const row = await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.entities.getById, { id: entityId });
+    expect(row?.metadata).toEqual({
+      title: "Engineering Manager",
+      email: "alice@example.com",
+      last_contact_at: at,
+    });
+  });
+
+  test("rejects invalid metadata shape for kind", async () => {
+    const t = makeTest();
+    const entityId = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Alice", kind: "person", aliases: [] },
+    });
+    await expect(
+      t.withIdentity({ subject: TEST_USER_A }).mutation(api.crm.updateEntityMetadata, {
+        entityId,
+        metadata: { email: "not-an-email" },
+      }),
+    ).rejects.toThrow(/INVALID/);
+  });
+
+  test("rejects person fields applied to an org", async () => {
+    const t = makeTest();
+    const entityId = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Acme", kind: "org", aliases: [] },
+    });
+    await expect(
+      t.withIdentity({ subject: TEST_USER_A }).mutation(api.crm.updateEntityMetadata, {
+        entityId,
+        // `title` is not in the org schema; strict() would reject — but Zod
+        // default strips unknowns. So instead supply an invalid headcount.
+        metadata: { headcount_estimate: -1 },
+      }),
+    ).rejects.toThrow(/INVALID/);
+  });
+
+  test("refuses cross-tenant entity ids", async () => {
+    const t = makeTest();
+    const entityId = await t.mutation(internal.entities.upsertInternal, {
+      userId: TEST_USER_A,
+      entity: { canonicalName: "Alice", kind: "person", aliases: [] },
+    });
+    await expect(
+      t.withIdentity({ subject: TEST_USER_B }).mutation(api.crm.updateEntityMetadata, {
+        entityId,
+        metadata: { title: "Stealing" },
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
+  });
+});

@@ -23,7 +23,7 @@ export async function listThoughts(
 ): Promise<ListThoughtsOutput> {
   assertUserId(userId);
   const input: ListThoughtsInput = parseInput(listThoughtsInputSchema, rawInput);
-  const { limit, days, type, topic, person } = input;
+  const { limit, days, type, topic, person, scope } = input;
   const rows = await deps.convex.listThoughts({
     userId,
     limit,
@@ -31,6 +31,7 @@ export async function listThoughts(
     ...(topic === undefined ? {} : { topic }),
     ...(person === undefined ? {} : { person }),
     ...(days === undefined ? {} : { days }),
+    ...(scope === undefined ? {} : { scope }),
   });
   const thoughts = rows.map((row) => {
     const out: {

@@ -4,6 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ThoughtCard } from "../components/thought-card";
 import type { ThoughtLike } from "../components/thought-card-model";
+import { useActiveScope } from "../lib/active-scope";
 
 export const Route = createFileRoute("/thoughts")({ component: Thoughts });
 
@@ -27,11 +28,17 @@ function Thoughts() {
 }
 
 function Body() {
-  const thoughts = useQuery(api.thoughts.listThoughts, { limit: 200 }) as ThoughtLike[] | undefined;
+  const { scope } = useActiveScope();
+  const thoughts = useQuery(api.thoughts.listThoughts, {
+    limit: 200,
+    ...(scope === null ? {} : { scope }),
+  }) as ThoughtLike[] | undefined;
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-semibold text-2xl">All thoughts</h1>
+        <h1 className="font-semibold text-2xl">
+          {scope === null ? "All thoughts" : `Thoughts · ${scope}`}
+        </h1>
         <p className="text-muted-foreground text-xs">
           Most recent 200 thoughts. Use{" "}
           <Link to="/search" className="underline">

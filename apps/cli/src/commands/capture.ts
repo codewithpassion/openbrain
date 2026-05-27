@@ -1,3 +1,4 @@
+import { ProjectSlug } from "@openbrains/shared";
 import type { Flags } from "../flags";
 import type { McpClientLike } from "../mcp-client";
 import { emit, emitJson, isJsonFlag } from "../output";
@@ -6,12 +7,14 @@ export interface CaptureOptions {
   content: string;
   client: McpClientLike;
   flags: Flags;
+  scope?: string;
 }
 
 export async function runCapture(opts: CaptureOptions): Promise<number> {
   const result = await opts.client.captureThought({
     content: opts.content,
     source: "cli",
+    ...(opts.scope === undefined ? {} : { scope: ProjectSlug.parse(opts.scope) }),
   });
   if (isJsonFlag(opts.flags)) {
     emitJson(result);

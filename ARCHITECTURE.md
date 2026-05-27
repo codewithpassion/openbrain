@@ -392,13 +392,13 @@ Workflows that operate **on** existing thoughts. All reuse Phase B's scheduled-a
 
 Adds:
 
-- `adaptive-capture-classification`: on capture, LLM fills `metadata.type` if not supplied.
-- `thought-enrichment`: scheduled action refines metadata/entities for under-tagged thoughts.
-- `panning-for-gold`: takes a brain-dump thought, splits into N evaluated idea thoughts.
-- **Duplicate review** (deferred from Phase A): vector-similarity scan to surface near-duplicates; dashboard page at `/inspector?tab=duplicates`.
-- Quality auditing: flags thoughts with missing fields, low embedding norm, no entities — surfaces in `/inspector`.
-- MCP tools: `classify_thought`, `enrich_thought`, `pan_brain_dump` — **landed as read-only LLM proxies** (see "MCP tools › Phase E"). Persistence (`adaptive-capture-classification`, `thought-enrichment`) is still scheduled — the tools surface results; the scheduled-action wiring is the remaining work.
-- Skill packs: fill out the remaining 13 of OB1's 16 (`claudeception`, `autodream-brain-sync`, `weekly-signal-diff`, `world-model-diagnostic`, `heavy-file-ingestion`, `competitive-analysis`, `deal-memo-drafting`, `financial-model-review`, `work-operating-model`, `openclaw-agent-memory`, `auto-capture`, `n-agentic-harnesses`, plus one TBD).
+- `adaptive-capture-classification`: on capture, LLM fills `metadata.type` if not supplied. **Landed**: `thoughtsAction.classifyOnCaptureInternal` is scheduled by `createThought` / `createThoughtInternal` whenever `metadata.type` is unset. Persists via `thoughts.setTypeInternal`.
+- `thought-enrichment`: scheduled action refines metadata/entities for under-tagged thoughts. **Landed**: `thoughtsAction.enrichThoughtInternal` + `thoughts.mergeMetadataInternal` (union for arrays, fill-only for `type` — never overwrites existing).
+- `panning-for-gold`: takes a brain-dump thought, splits into N evaluated idea thoughts. **Landed**: `thoughtsAction.splitBrainDumpInternal` + `thoughts.persistSplitInternal`. Children carry `parentThoughtId` (new schema field, `by_user_parent` index) and are idempotent on `(parentThoughtId, content)` via a derived fingerprint.
+- **Duplicate review** (deferred from Phase A): vector-similarity scan to surface near-duplicates. **Primitive landed** as `services/related-thoughts.ts` + MCP tool `related_thoughts`. **UI deferred**: `/inspector?tab=duplicates` needs a Convex→Worker Vectorize bridge.
+- Quality auditing: flags thoughts with missing fields, low embedding norm, no entities — surfaces in `/inspector`. **Landed** (`convex/quality.ts`, `/quality` route).
+- MCP tools: `classify_thought`, `enrich_thought`, `pan_brain_dump` — read-only LLM proxies. `related_thoughts` added in this phase for duplicate review.
+- Skill packs: all 16 OB1 packs shipped (Phase A established the convention; remaining packs filled opportunistically).
 
 ### Phase F — Professional CRM (depends on Phase C entity model)
 
@@ -406,14 +406,50 @@ Domain extension. CRM = entities of `kind: "person"` + `kind: "org"` with extra 
 
 Adds:
 
-- Entity schema extensions: `person` gains `{title, company: entityRef, email, phone, last_contact_at}`; `org` gains `{industry, hq, headcount_estimate}`.
-- New table `interactions` — `{ personId, thoughtId, kind, at }`.
-- Routes `/crm`, `/crm/$personId`, `/crm/$orgId`.
-- Skill pack: `relationship-development`.
+- Entity schema extensions: `person` gains `{title, company: entityRef, email, phone, last_contact_at, notes}`; `org` gains `{industry, hq, headcount_estimate, notes}`. **Landed**: discriminated-union Zod schema in `packages/shared/src/entities.ts` (`personEntityMetadataSchema`, `orgEntityMetadataSchema`). Convex validator stays `v.any()` (per the CLAUDE.md pattern); `crm.updateEntityMetadata` narrows at the boundary and rejects cross-kind writes.
+- New table `interactions` — `{ personId, thoughtId, kind, at }`. **Landed**.
+- Routes `/crm`, `/crm/$personId`, `/crm/$orgId`. **All landed**.
+- Skill pack: `relationship-development`. **Landed**.
+
+### Phase H — Project scope (one brain, many namespaces) — **landed (Convex + MCP)**
+
+Adds an optional `scope` namespace so a user with one connected brain can target a specific project (e.g. `work`, `side-project-x`). Unscoped thoughts remain visible everywhere — they are "personal/global" memory.
+
+Landed:
+
+- Convex `projects` table — `{ userId, slug, name, description?, createdAt }`, `(userId, slug)` unique. CRUD: `projects.create/list/getBySlug` plus `createInternal`/`listInternal`/`getBySlugInternal`.
+- `thoughts.scope?: v.optional(v.string())` with two new indexes: `by_user_scope_created` (filtered list) and `by_user_scope_fingerprint` (dedup is per-`(user, scope, fingerprint)` — the same idea can exist in two projects independently).
+- Validation: writing a `scope` requires the slug to exist for that user (throws `PROJECT_NOT_FOUND`) — typo protection.
+- Threaded through: `createThought`, `createThoughtInternal`, `listThoughts`, `listThoughtsInternal`, `getByFingerprint`, `getByFingerprintInternal`, `updateContent` collision check, `persistSplit` (children inherit parent scope).
+- HTTP boundary: `/api/projects` (POST = create), `/api/projects/list` (POST). Capture/list/by-fingerprint endpoints accept optional `scope`.
+- Shared Zod: branded `ProjectId`/`ProjectSlug`, `projectSchema`, `createProject`/`listProjects` tool I/O schemas. Existing tool inputs (`capture_thought`, `list_thoughts`, `search_thoughts`, `memory_recall`) gained `scope?: ProjectSlug`.
+- Services: `listProjects`, `createProject`. `searchThoughts` + `memoryRecall` over-fetch from Vectorize then post-filter by `scope` against the Convex row (Convex is the source of truth for scope).
+- MCP tools: `list_projects`, `create_project`.
+
+**Landed (follow-ups)**:
+
+- Vectorize scope filter push-down: `searchThoughts`/`memoryRecall` thread `scope` into the Vectorize `query.metadata.filter` **when the operator opts in** via `SCOPE_INDEX_READY=1` on the MCP + dashboard Workers (`ServiceDeps.featureFlags.scopeIndexReady`). Otherwise they over-fetch (`topK = min(100, limit*4)`) and post-filter via Convex — safe with or without the metadata index. The Convex-row check is always enforced as the correctness gate. One-time operator step: `wrangler vectorize create-metadata-index thoughts-v1 --property-name=scope --type=string`, then flip the flag.
+- CLI `ob project create/list/use` + per-command `--scope=<slug>` / `--no-scope` flags + active-project pin in `~/.config/ob/credentials.json` (under `activeProject`).
+- Per-user session-scope default via OAUTH_KV (`session-scope:<userId>` keyspace). Two new MCP tools `set_session_scope` / `get_session_scope`. Capture/list/search/recall/memory_recall handlers default to the pinned scope when input doesn't carry one. Tool-supplied `scope` always wins.
+- Dashboard project switcher in the header chrome backed by `useActiveScope` (`localStorage` `OB_ACTIVE_SCOPE`). Quick-capture / `/thoughts` / `/search` pass the pin through. Switcher hides while `api.projects.list` is loading.
+
+**Still deferred**:
+
+- Path-segment scoped routes (`crm.$scope.$personId.tsx`, etc.) — the current dashboard uses a global pin instead of literal route segments; entity-scoped CRM filtering needs an entity-side `scope` decision first.
+- Per-token (rather than per-user) session-scope isolation in the MCP Worker, so two AI clients on the same user can have independent defaults. Needs a stable per-grant identifier surfaced into `AuthContext`.
+- `memory_use_policy.scopes` (array) is preserved as the trust-grade-per-scope sidecar. That's a different semantic from `thoughts.scope` (the project namespace) and is intentionally not lifted.
 
 ### Phase G — Life engine
 
-OB1's flagship "self-improving personal assistant." **Scope not defined yet** — re-scope at the start of the phase. Likely shape: scheduled briefings consuming recent thoughts + entities + a "world model" instruction-grade thought, producing structured briefing thoughts back.
+OB1's flagship "self-improving personal assistant." Scope doc lives at [`docs/phase-g-scope.md`](docs/phase-g-scope.md). Daily briefing loop: action reads recent thoughts + entities + the user's "world model" instruction-grade thought, produces a `briefings` row **and** a paired `thoughts` row with `metadata.type === "briefing"`.
+
+Landed:
+
+- `briefingsAction.generateForUserInternal` — best-effort, env-gated, mirrors `digestsAction`.
+- `briefings.recordInternal` now writes a paired briefing-thought (idempotent on `(userId, date)`).
+- `briefingsCron.fanOutDailyBriefings` — daily fan-out 30 min after digests.
+- `briefings.worldModelForInternal` consumes the user's instruction-grade world-model thought as standing context.
+- `briefingsAction.regenerateForMe` — public "regenerate now" action.
 
 Depends on Phases B, C, E.
 

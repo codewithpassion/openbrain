@@ -517,3 +517,92 @@ describe("GET /api/thoughts/stats", () => {
     expect(body.topPeople[1]).toEqual({ name: "bob", count: 1 });
   });
 });
+
+describe("projects HTTP boundary", () => {
+  test("POST /api/projects creates a project for the user-id header", async () => {
+    const t = makeTest();
+    const res = await t.fetch("/api/projects", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({ slug: "work", name: "Work" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; slug: string };
+    expect(body.slug).toBe("work");
+    const list = await t.withIdentity({ subject: TEST_USER_A }).query(api.projects.list, {});
+    expect(list).toHaveLength(1);
+  });
+
+  test("POST /api/projects rejects an invalid slug with 400", async () => {
+    const t = makeTest();
+    const res = await t.fetch("/api/projects", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({ slug: "Has Space", name: "x" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("POST /api/projects returns 409 on duplicate slug", async () => {
+    const t = makeTest();
+    await t.fetch("/api/projects", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({ slug: "work", name: "Work" }),
+    });
+    const res = await t.fetch("/api/projects", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({ slug: "work", name: "Work 2" }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  test("POST /api/thoughts with valid scope writes the thought into that project", async () => {
+    const t = makeTest();
+    await t.fetch("/api/projects", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({ slug: "work", name: "Work" }),
+    });
+    const res = await t.fetch("/api/thoughts", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({
+        content: "scoped thought",
+        source: "test",
+        embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+        embeddingDims: 1024,
+        fingerprint: "f".repeat(64),
+        metadata: { topics: [], people: [], action_items: [], dates_mentioned: [] },
+        scope: "work",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const all = await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.thoughts.listThoughts, { scope: "work" });
+    expect(all).toHaveLength(1);
+    expect(all[0]?.scope).toBe("work");
+  });
+
+  test("POST /api/thoughts with unknown scope returns 404 PROJECT_NOT_FOUND", async () => {
+    const t = makeTest();
+    const res = await t.fetch("/api/thoughts", {
+      method: "POST",
+      headers: authHeaders(TEST_USER_A),
+      body: JSON.stringify({
+        content: "scoped thought",
+        source: "test",
+        embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+        embeddingDims: 1024,
+        fingerprint: "f".repeat(64),
+        metadata: { topics: [], people: [], action_items: [], dates_mentioned: [] },
+        scope: "ghost",
+      }),
+    });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("PROJECT_NOT_FOUND");
+  });
+});
