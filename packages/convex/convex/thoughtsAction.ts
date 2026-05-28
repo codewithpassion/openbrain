@@ -23,8 +23,28 @@ import { createWorkersAiHttpChatClient } from "@openbrains/ingest/chat";
 import { createWorkersAiMetadataExtractor } from "@openbrains/ingest/metadata";
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalAction } from "./_generated/server.js";
+import { type ActionCtx, internalAction } from "./_generated/server.js";
 import { readChatBridgeEnv } from "./_lib/chatEnv.js";
+
+async function recordRun(
+  ctx: ActionCtx,
+  args: {
+    name: string;
+    userId: string;
+    status: "success" | "failure" | "skipped";
+    startedAt: number;
+    note?: string;
+  },
+): Promise<void> {
+  await ctx.runMutation(internal.jobs.recordRunInternal, {
+    name: args.name,
+    userId: args.userId,
+    status: args.status,
+    startedAt: args.startedAt,
+    finishedAt: Date.now(),
+    ...(args.note === undefined ? {} : { note: args.note }),
+  });
+}
 
 const DEFAULT_EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b";
 
@@ -73,8 +93,17 @@ export type DeleteVectorOutcome =
 export const classifyOnCaptureInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts") },
   handler: async (ctx, args): Promise<ClassifyOutcome> => {
+    const startedAt = Date.now();
+    const name = "thoughts.classify";
     const chatEnv = readChatBridgeEnv();
     if ("skipped" in chatEnv) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "skipped",
+        startedAt,
+        note: chatEnv.skipped,
+      });
       return { status: "skipped", reason: chatEnv.skipped };
     }
     const thought = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
@@ -82,9 +111,23 @@ export const classifyOnCaptureInternal = internalAction({
       thoughtId: args.thoughtId,
     });
     if (thought === null) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: "thought not found",
+      });
       return { status: "failure", reason: "thought not found" };
     }
     if (thought.metadata.type !== undefined && thought.metadata.type !== "") {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "success",
+        startedAt,
+        note: "noop: type already set",
+      });
       return { status: "noop", reason: "type already set" };
     }
     const ai = createWorkersAiHttpChatClient({
@@ -94,6 +137,13 @@ export const classifyOnCaptureInternal = internalAction({
     const extractor = createWorkersAiMetadataExtractor({ ai });
     const metadata = await extractor.extract(thought.content);
     if (metadata.type === undefined) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "success",
+        startedAt,
+        note: "noop: extractor returned no type",
+      });
       return { status: "noop", reason: "extractor returned no type" };
     }
     const wrote = await ctx.runMutation(internal.thoughts.setTypeInternal, {
@@ -102,8 +152,22 @@ export const classifyOnCaptureInternal = internalAction({
       type: metadata.type,
     });
     if (!wrote) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "success",
+        startedAt,
+        note: "noop: type was set concurrently",
+      });
       return { status: "noop", reason: "type was set concurrently" };
     }
+    await recordRun(ctx, {
+      name,
+      userId: args.userId,
+      status: "success",
+      startedAt,
+      note: `type=${metadata.type}`,
+    });
     return { status: "success", type: metadata.type };
   },
 });
@@ -111,8 +175,17 @@ export const classifyOnCaptureInternal = internalAction({
 export const enrichThoughtInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts") },
   handler: async (ctx, args): Promise<EnrichOutcome> => {
+    const startedAt = Date.now();
+    const name = "thoughts.enrich";
     const chatEnv = readChatBridgeEnv();
     if ("skipped" in chatEnv) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "skipped",
+        startedAt,
+        note: chatEnv.skipped,
+      });
       return { status: "skipped", reason: chatEnv.skipped };
     }
     const thought = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
@@ -120,6 +193,13 @@ export const enrichThoughtInternal = internalAction({
       thoughtId: args.thoughtId,
     });
     if (thought === null) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: "thought not found",
+      });
       return { status: "failure", reason: "thought not found" };
     }
     const ai = createWorkersAiHttpChatClient({
@@ -138,6 +218,13 @@ export const enrichThoughtInternal = internalAction({
         action_items: [...metadata.action_items],
         dates_mentioned: [...metadata.dates_mentioned],
       },
+    });
+    await recordRun(ctx, {
+      name,
+      userId: args.userId,
+      status: "success",
+      startedAt,
+      note: `${metadata.topics.length.toString()} topic(s), ${metadata.people.length.toString()} person/people`,
     });
     return { status: "success" };
   },
@@ -159,8 +246,17 @@ export const enrichThoughtInternal = internalAction({
 export const reembedInternal = internalAction({
   args: { userId: v.string(), thoughtId: v.id("thoughts") },
   handler: async (ctx, args): Promise<ReembedOutcome> => {
+    const startedAt = Date.now();
+    const name = "thoughts.reembed";
     const env = readWorkerEnv();
     if ("skipped" in env) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "skipped",
+        startedAt,
+        note: env.skipped,
+      });
       return { status: "skipped", reason: env.skipped };
     }
     const thought = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
@@ -168,6 +264,13 @@ export const reembedInternal = internalAction({
       thoughtId: args.thoughtId,
     });
     if (thought === null) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: "thought not found",
+      });
       return { status: "failure", reason: "thought not found" };
     }
     const ai = createWorkersAiHttpClient({ baseUrl: env.baseUrl, internalSecret: env.secret });
@@ -176,7 +279,15 @@ export const reembedInternal = internalAction({
     try {
       embedding = await embedder.embed(thought.content);
     } catch (e) {
-      return { status: "failure", reason: e instanceof Error ? e.message : "embed failed" };
+      const reason = e instanceof Error ? e.message : "embed failed";
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: reason,
+      });
+      return { status: "failure", reason };
     }
     const vectorizeId = thought.vectorizeId ?? args.thoughtId;
     const upsertMetadata: { source: string; type?: string } =
@@ -199,10 +310,26 @@ export const reembedInternal = internalAction({
         }),
       });
     } catch (e) {
-      return { status: "failure", reason: e instanceof Error ? e.message : "upsert fetch failed" };
+      const reason = e instanceof Error ? e.message : "upsert fetch failed";
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: reason,
+      });
+      return { status: "failure", reason };
     }
     if (!res.ok) {
-      return { status: "failure", reason: `vector upsert ${res.status.toString()}` };
+      const reason = `vector upsert ${res.status.toString()}`;
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: reason,
+      });
+      return { status: "failure", reason };
     }
     await ctx.runMutation(internal.thoughts.setEmbeddingInternal, {
       userId: args.userId,
@@ -210,6 +337,13 @@ export const reembedInternal = internalAction({
       embeddingModel: embedding.model,
       embeddingDims: embedding.dimensions,
       vectorizeId,
+    });
+    await recordRun(ctx, {
+      name,
+      userId: args.userId,
+      status: "success",
+      startedAt,
+      note: `${embedding.model} (${embedding.dimensions.toString()}d)`,
     });
     return { status: "success", model: embedding.model, dimensions: embedding.dimensions };
   },
@@ -226,9 +360,18 @@ export const reembedInternal = internalAction({
  */
 export const deleteVectorInternal = internalAction({
   args: { userId: v.string(), vectorizeId: v.string() },
-  handler: async (_ctx, args): Promise<DeleteVectorOutcome> => {
+  handler: async (ctx, args): Promise<DeleteVectorOutcome> => {
+    const startedAt = Date.now();
+    const name = "thoughts.deleteVector";
     const env = readWorkerEnv();
     if ("skipped" in env) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "skipped",
+        startedAt,
+        note: env.skipped,
+      });
       return { status: "skipped", reason: env.skipped };
     }
     let res: Response;
@@ -242,11 +385,34 @@ export const deleteVectorInternal = internalAction({
         body: JSON.stringify({ userId: args.userId, id: args.vectorizeId }),
       });
     } catch (e) {
-      return { status: "failure", reason: e instanceof Error ? e.message : "delete fetch failed" };
+      const reason = e instanceof Error ? e.message : "delete fetch failed";
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: reason,
+      });
+      return { status: "failure", reason };
     }
     if (!res.ok) {
-      return { status: "failure", reason: `vector delete ${res.status.toString()}` };
+      const reason = `vector delete ${res.status.toString()}`;
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: reason,
+      });
+      return { status: "failure", reason };
     }
+    await recordRun(ctx, {
+      name,
+      userId: args.userId,
+      status: "success",
+      startedAt,
+      note: `vector ${args.vectorizeId} deleted`,
+    });
     return { status: "success" };
   },
 });
@@ -258,8 +424,17 @@ export const splitBrainDumpInternal = internalAction({
     maxIdeas: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<SplitOutcome> => {
+    const startedAt = Date.now();
+    const name = "thoughts.split";
     const chatEnv = readChatBridgeEnv();
     if ("skipped" in chatEnv) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "skipped",
+        startedAt,
+        note: chatEnv.skipped,
+      });
       return { status: "skipped", reason: chatEnv.skipped };
     }
     const parent = await ctx.runQuery(internal.thoughts.getThoughtInternal, {
@@ -267,6 +442,13 @@ export const splitBrainDumpInternal = internalAction({
       thoughtId: args.parentThoughtId,
     });
     if (parent === null) {
+      await recordRun(ctx, {
+        name,
+        userId: args.userId,
+        status: "failure",
+        startedAt,
+        note: "parent thought not found",
+      });
       return { status: "failure", reason: "parent thought not found" };
     }
     const ai = createWorkersAiHttpChatClient({
@@ -288,6 +470,13 @@ export const splitBrainDumpInternal = internalAction({
         }
         return out;
       }),
+    });
+    await recordRun(ctx, {
+      name,
+      userId: args.userId,
+      status: "success",
+      startedAt,
+      note: `${result.created.toString()} idea(s) created`,
     });
     return { status: "success", created: result.created };
   },

@@ -88,6 +88,13 @@ describe("thoughts.setEmbeddingInternal", () => {
   });
 });
 
+async function jobRuns(t: ReturnType<typeof makeTest>, name: string) {
+  return await t
+    .withIdentity({ subject: TEST_USER_A })
+    .query(api.jobs.listForUser, { limit: 50 })
+    .then((rows) => rows.filter((r) => r.name === name));
+}
+
 describe("thoughtsAction.reembedInternal", () => {
   let prevMcpUrl: string | undefined;
   let prevSecret: string | undefined;
@@ -103,7 +110,7 @@ describe("thoughtsAction.reembedInternal", () => {
     stubFetch(originalFetch);
   });
 
-  test("returns skipped when MCP_WORKER_URL is unset", async () => {
+  test("returns skipped + records job_run when MCP_WORKER_URL is unset", async () => {
     setEnv("MCP_WORKER_URL", undefined);
     setEnv("INTERNAL_API_SECRET", "shh");
     const t = makeTest();
@@ -113,6 +120,9 @@ describe("thoughtsAction.reembedInternal", () => {
       thoughtId: id,
     });
     expect(out.status).toBe("skipped");
+    const runs = await jobRuns(t, "thoughts.reembed");
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).toBe("skipped");
   });
 
   test("returns skipped when INTERNAL_API_SECRET is unset", async () => {
@@ -242,7 +252,7 @@ describe("thoughtsAction.deleteVectorInternal", () => {
     stubFetch(originalFetch);
   });
 
-  test("returns skipped when MCP_WORKER_URL is unset", async () => {
+  test("returns skipped + records job_run when MCP_WORKER_URL is unset", async () => {
     setEnv("MCP_WORKER_URL", undefined);
     setEnv("INTERNAL_API_SECRET", "shh");
     const t = makeTest();
@@ -251,6 +261,9 @@ describe("thoughtsAction.deleteVectorInternal", () => {
       vectorizeId: "vec_001",
     });
     expect(out.status).toBe("skipped");
+    const runs = await jobRuns(t, "thoughts.deleteVector");
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).toBe("skipped");
   });
 
   test("happy path: returns success and posts to /internal/vector/delete", async () => {

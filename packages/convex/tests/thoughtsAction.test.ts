@@ -215,7 +215,14 @@ describe("thoughtsAction internal actions", () => {
     });
   }
 
-  test("classifyOnCaptureInternal skips when DASHBOARD_WORKER_URL is unset", async () => {
+  async function jobRuns(t: ReturnType<typeof makeTest>, name: string) {
+    return await t
+      .withIdentity({ subject: TEST_USER_A })
+      .query(api.jobs.listForUser, { limit: 50 })
+      .then((rows) => rows.filter((r) => r.name === name));
+  }
+
+  test("classifyOnCaptureInternal skips + records job_run when DASHBOARD_WORKER_URL is unset", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A);
     await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
@@ -224,10 +231,13 @@ describe("thoughtsAction internal actions", () => {
         thoughtId: id,
       });
       expect(out.status).toBe("skipped");
+      const runs = await jobRuns(t, "thoughts.classify");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("skipped");
     });
   });
 
-  test("classifyOnCaptureInternal is a noop when metadata.type is already set", async () => {
+  test("classifyOnCaptureInternal noop records job_run as success with note", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A, { type: "idea" });
     setEnv("DASHBOARD_WORKER_URL", "https://ob-dash.example.com");
@@ -238,13 +248,17 @@ describe("thoughtsAction internal actions", () => {
         thoughtId: id,
       });
       expect(out.status).toBe("noop");
+      const runs = await jobRuns(t, "thoughts.classify");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("success");
+      expect(runs[0]?.note).toContain("noop");
     } finally {
       setEnv("DASHBOARD_WORKER_URL", undefined);
       setEnv("INTERNAL_API_SECRET", undefined);
     }
   });
 
-  test("enrichThoughtInternal skips when env missing", async () => {
+  test("enrichThoughtInternal skips + records job_run when env missing", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A);
     await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
@@ -253,10 +267,13 @@ describe("thoughtsAction internal actions", () => {
         thoughtId: id,
       });
       expect(out.status).toBe("skipped");
+      const runs = await jobRuns(t, "thoughts.enrich");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("skipped");
     });
   });
 
-  test("splitBrainDumpInternal skips when env missing", async () => {
+  test("splitBrainDumpInternal skips + records job_run when env missing", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A, { content: "dump" });
     await withEnvCleared(["DASHBOARD_WORKER_URL"], async () => {
@@ -266,6 +283,9 @@ describe("thoughtsAction internal actions", () => {
         maxIdeas: 3,
       });
       expect(out.status).toBe("skipped");
+      const runs = await jobRuns(t, "thoughts.split");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("skipped");
     });
   });
 });

@@ -38,8 +38,15 @@ function chatResponse(payload: unknown): Response {
   });
 }
 
+async function jobRuns(t: ReturnType<typeof makeTest>, name: string) {
+  return await t
+    .withIdentity({ subject: TEST_USER_A })
+    .query(api.jobs.listForUser, { limit: 50 })
+    .then((rows) => rows.filter((r) => r.name === name));
+}
+
 describe("entitiesAction.extractFromThoughtInternal", () => {
-  test("skips when DASHBOARD_WORKER_URL is unset", async () => {
+  test("skips and records a job_runs row when DASHBOARD_WORKER_URL is unset", async () => {
     const t = makeTest();
     const id = await seedThought(t, TEST_USER_A);
     // biome-ignore lint/complexity/useLiteralKeys: env access requires brackets under noPropertyAccessFromIndexSignature
@@ -52,6 +59,10 @@ describe("entitiesAction.extractFromThoughtInternal", () => {
         content: "hi",
       });
       expect(out.status).toBe("skipped");
+      const runs = await jobRuns(t, "entities.extract");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("skipped");
+      expect(runs[0]?.note).toContain("DASHBOARD_WORKER_URL");
     } finally {
       setEnv("DASHBOARD_WORKER_URL", prior);
     }
@@ -163,6 +174,11 @@ describe("entitiesAction.extractFromThoughtInternal", () => {
         content: "edited content mentioning a new entity",
       });
       expect(out.status).toBe("success");
+
+      const runs = await jobRuns(t, "entities.extract");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("success");
+      expect(runs[0]?.note).toContain("1 entity");
 
       // Mention for the edited thought against `oldA` is gone…
       const oldAMentions = await t

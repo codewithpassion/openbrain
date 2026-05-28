@@ -43,7 +43,9 @@ function Body() {
       <header className="space-y-1">
         <h1 className="font-semibold text-2xl">Scheduled jobs</h1>
         <p className="text-muted-foreground text-sm">
-          Every cron run touching your data. Failures and skips show here too — that's the point.
+          Every action touching your data — capture-time entity extraction and classification,
+          re-embeds on edit, daily digests, and briefings. Failures and skips show here too (if
+          entity extraction is silently skipping, this is the place you'll see it).
         </p>
       </header>
 
@@ -56,7 +58,8 @@ function Body() {
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : models.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No job runs yet. The daily digest cron runs once per day at 12:00 UTC.
+              No job runs yet. Capture a thought to trigger entity extraction; daily digests run
+              once per day at 12:00 UTC.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
